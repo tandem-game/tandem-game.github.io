@@ -268,12 +268,30 @@ describe('the header links', () => {
     expect(ui.getByRole('heading', { name: 'Play with a partner' })).toBeInTheDocument()
   })
 
-  it('leave out each link on the screen it opens, and offer the other', async () => {
+  it('keep all three links, with the one for the current screen marked and not clickable', async () => {
     const user = userEvent.setup()
     const { ui } = open(createMemoryNetwork())
     await user.click(header(ui).getByRole('button', { name: 'Settings' }))
-    expect(header(ui).queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
-    expect(header(ui).getByRole('button', { name: 'How to play' })).toBeInTheDocument()
+    expect(header(ui).getByRole('button', { name: 'Settings' })).toBeDisabled()
+    expect(header(ui).getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-current', 'page')
+    expect(header(ui).getByRole('button', { name: 'Home' })).toBeEnabled()
+    expect(header(ui).getByRole('button', { name: 'How to play' })).toBeEnabled()
+    await user.click(header(ui).getByRole('button', { name: 'How to play' }))
+    expect(header(ui).getByRole('button', { name: 'How to play' })).toBeDisabled()
+    expect(header(ui).getByRole('button', { name: 'Settings' })).toBeEnabled()
+  })
+
+  it('include Home, which leaves Settings and the tutorial for the start screen', async () => {
+    const user = userEvent.setup()
+    const { ui } = open(createMemoryNetwork())
+    expect(header(ui).getByRole('button', { name: 'Home' })).toBeDisabled()
+    await user.click(header(ui).getByRole('button', { name: 'Settings' }))
+    await user.click(header(ui).getByRole('button', { name: 'Home' }))
+    expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
+    await user.click(header(ui).getByRole('button', { name: 'How to play' }))
+    await user.click(ui.getByRole('button', { name: 'Next' }))
+    await user.click(header(ui).getByRole('button', { name: 'Home' }))
+    expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
   })
 
   it('are not shown on the first visit', () => {

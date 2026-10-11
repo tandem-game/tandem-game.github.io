@@ -1,26 +1,27 @@
 interface AppHeaderProps {
-  /** Opens the tutorial; leave out where it is already open or must not be left for. */
-  onHowToPlay?: () => void
-  /** Opens the settings; leave out where they are already open or while a game runs. */
-  onSettings?: () => void
+  /** Shows the menu; leave out while a game runs or on the first visit, which leads on to the settings. */
+  menu?: {
+    /** Each one is left out where the player already is: its link then stays, marked as the current page. */
+    onHome?: () => void
+    onHowToPlay?: () => void
+    onSettings?: () => void
+  }
 }
 
-/** The title and tagline, with "How to play" and "Settings" at the top left when the player may open them. */
-export function AppHeader({ onHowToPlay, onSettings }: AppHeaderProps) {
+/** The title and tagline, with "Home", "How to play" and "Settings" at the top right outside a game. */
+export function AppHeader({ menu }: AppHeaderProps) {
+  const link = (label: string, onClick?: () => void) => (
+    <button type="button" className="link" onClick={onClick} aria-current={onClick ? undefined : 'page'} disabled={!onClick}>
+      {label}
+    </button>
+  )
   return (
     <header className="app-header">
-      {(onHowToPlay || onSettings) && (
+      {menu && (
         <nav className="header-links" aria-label="Help and settings">
-          {onHowToPlay && (
-            <button type="button" className="link" onClick={onHowToPlay}>
-              How to play
-            </button>
-          )}
-          {onSettings && (
-            <button type="button" className="link" onClick={onSettings}>
-              Settings
-            </button>
-          )}
+          {link('Home', menu.onHome)}
+          {link('How to play', menu.onHowToPlay)}
+          {link('Settings', menu.onSettings)}
         </nav>
       )}
       <h1>

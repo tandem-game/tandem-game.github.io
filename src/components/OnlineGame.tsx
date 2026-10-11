@@ -81,8 +81,15 @@ export function OnlineGame({ network, languages, initialCode, generator }: Onlin
   const showLinks = !inGame && !firstVisit && origin !== undefined
   const header = (
     <AppHeader
-      onHowToPlay={showLinks && stage.kind !== 'tutorial' ? () => setStage({ kind: 'tutorial', returnTo: stage }) : undefined}
-      onSettings={showLinks && stage.kind !== 'settings' && origin ? editFrom(origin) : undefined}
+      menu={
+        showLinks && origin
+          ? {
+              onHome: stage.kind === 'mode' ? undefined : toMode,
+              onHowToPlay: stage.kind === 'tutorial' ? undefined : () => setStage({ kind: 'tutorial', returnTo: stage }),
+              onSettings: stage.kind === 'settings' ? undefined : editFrom(origin),
+            }
+          : undefined
+      }
     />
   )
 

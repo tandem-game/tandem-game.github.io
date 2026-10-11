@@ -654,11 +654,11 @@ button:disabled {
   margin: 0;
 }
 
-/* Pinned to the top left corner of the window, not to the centred column. */
+/* Pinned to the top right corner of the window, not to the centred column. */
 .header-links {
   position: absolute;
   top: var(--space-1);
-  left: var(--space-2);
+  right: var(--space-2);
   display: flex;
   gap: var(--space-1);
 }
@@ -671,4 +671,12 @@ button.link {
   color: var(--accent);
   font-weight: 600;
   text-decoration: underline;
+}
+
+/* The page the player is on stays in the menu, so it does not jump around, but is not a link. */
+button.link:disabled {
+  color: var(--text);
+  text-decoration: none;
+  opacity: 1;
+  cursor: default;
 }
