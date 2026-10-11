@@ -52,6 +52,7 @@ Requires Node 22 (see `.nvmrc`). Pushing to `main` runs lint, unit tests and the
 - If the host closes the tab the game ends. A guest who drops can rejoin with the same code while the host is still there.
 - Only one guest can join a game.
 - Sentences come from a small model on Cloudflare's free plan, so they can be odd and the daily allowance can run out.
+- Visits to the published site are counted with [Cloudflare Web Analytics](https://www.cloudflare.com/web-analytics/) (`src/analytics.ts`): page views, countries, referrers and devices, without cookies or any personal data. Nothing is sent from local runs or tests. It cannot tell who visited, and since the app is one page it only shows `/`.
 
 ## More
 
