@@ -10,7 +10,7 @@ Start by choosing **1 player** or **2 players**.
 
 ### On your own (1 player)
 
-Your saved settings (language you speak, language you are learning, number of sentences from 1 to 5, difficulty) are shown first; pick a topic (one of ten everyday ones, or your own). An AI writes the sentences in your language, with their translations. Review them (ask for new ones if something looks off) and tap "Looks good". For each sentence, say it aloud in the language you are learning, tap "Show translation" to check yourself, then "Next turn". Nothing is sent to another device, and there is no scoring.
+Your saved settings (language you speak, language you are learning, number of sentences from 1 to 5, difficulty) are shown first; pick a topic (one of ten everyday ones, or your own). An AI writes the sentences in your language, with their translations, and the round starts as soon as they are ready. For each sentence, say it aloud in the language you are learning, tap "Show translation" to check yourself, then "Next turn". Nothing is sent to another device, and there is no scoring.
 
 ### Saved settings
 
@@ -20,7 +20,7 @@ The first time you open the site, you are asked to save your settings: the langu
 
 1. One player chooses "Create a game", checks the summary of their saved settings (editing them if needed) and picks a topic (one of ten everyday ones, or their own).
 2. They send their partner the invite link (or the 6-digit code). The partner joins with their own saved settings, and the game picks the mode from both players' languages: if they speak and learn the same two languages (say, both speak German and learn English), both read German sentences and translate them into English; otherwise each learns what the other speaks, using the host's languages.
-3. An AI writes the sentences. Each player reviews the ones they will read aloud (in their own language) and either can ask for new ones. The round starts when both tap "Looks good". By default the review is skipped and the round starts as soon as the sentences are written; turn on "Review sentences before the round" in the settings to check them first.
+3. An AI writes the sentences, and the round starts for both players as soon as they are written. Both screens show "Getting your sentences ready" meanwhile; if the AI fails, the host can try again or choose another topic.
 4. Take turns translating aloud; your partner judges. The speaker taps "Show translation" when done, or "Next turn" to skip it.
 
 Be on a call or in the same room: translations are spoken, not typed.

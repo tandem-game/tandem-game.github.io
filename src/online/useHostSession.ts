@@ -14,8 +14,6 @@ export interface HostSession {
   dispatch: (event: RoomEvent) => void
 }
 
-const ignore = () => {}
-
 /**
  * Opens a room and keeps it in sync with the guest. The host holds the real
  * game state; the guest sends requests and gets a full copy after every change.
@@ -24,8 +22,6 @@ const ignore = () => {}
 export function useHostSession(
   network: Network,
   host: PlayerLanguages,
-  /** The guest asked for new sentences; only the host's device can call the AI. */
-  onGuestRegenerate: () => void = ignore,
   /** The topic whose sentences are written as soon as the guest has joined, if any. */
   firstTopic?: string,
   /** False in a build without AI: the guest is then told the sentences cannot be written. */
@@ -37,10 +33,6 @@ export function useHostSession(
   // The connection the guest is on, so a guest who rejoins gets a copy of the state on their new one.
   const [guestConnection, setGuestConnection] = useState<Connection | null>(null)
   const guest = useRef<Connection | null>(null)
-  const regenerate = useRef(onGuestRegenerate)
-  useEffect(() => {
-    regenerate.current = onGuestRegenerate
-  })
 
   useEffect(() => {
     let cancelled = false
@@ -56,10 +48,6 @@ export function useHostSession(
         const message = parseGuestMessage(raw)
         if (message?.type === 'hello') {
           dispatch({ type: 'GUEST_HELLO', languages: message.languages })
-        } else if (message?.type === 'confirm') {
-          dispatch({ type: 'CONFIRM', from: 2 })
-        } else if (message?.type === 'regenerate') {
-          regenerate.current()
         } else if (message?.type === 'next-turn') {
           dispatch({ type: 'NEXT_TURN', from: 2 })
         } else if (message?.type === 'reveal') {
@@ -70,7 +58,6 @@ export function useHostSession(
         if (guest.current === connection) {
           guest.current = null
           setGuestConnection(null)
-          dispatch({ type: 'GUEST_LEFT' })
         }
       })
       setGuestConnection(connection)

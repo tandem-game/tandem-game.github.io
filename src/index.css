@@ -254,24 +254,7 @@ progress {
   font-size: 2.75rem;
 }
 
-/* Review of a round's sentences */
-
-.preview-list {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.preview-list li {
-  padding: var(--space-2) var(--space-3);
-  border-left: 6px solid var(--player);
-  border-radius: 0.75rem;
-  background: var(--player-tint);
-  font-size: 1.1rem;
-  font-weight: 600;
-}
+/* The label and note on a sentence */
 
 .preview-who {
   display: block;
@@ -285,7 +268,7 @@ progress {
   font-size: 0.875rem;
 }
 
-/* The translation under a sentence, in the review and during the round */
+/* The translation under a sentence during the round */
 
 .preview-translation {
   display: block;

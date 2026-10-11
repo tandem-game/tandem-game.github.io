@@ -5,10 +5,10 @@ import { topicName } from '../game/topicName'
 import type { Network } from '../online/network'
 import { useGuestSession, type GuestSession } from '../online/useGuestSession'
 import { PlayerChips } from './PlayerChips'
-import { RoundPreview } from './RoundPreview'
 import { StepIndicator } from './StepIndicator'
 import { TurnView } from './TurnView'
 import { Waiting } from './Waiting'
+import { WritingSentences } from './WritingSentences'
 
 interface GuestRoomProps {
   network: Network
@@ -29,7 +29,7 @@ const PROBLEMS: Record<Exclude<GuestSession['status'], 'connecting' | 'connected
 
 /** The device that joined: it is Player 2 and shows what the host says is happening. */
 export function GuestRoom({ network, languages, saved, code, onRetry, onChangeCode, onLeave }: GuestRoomProps) {
-  const { status, room, confirm, regenerate, nextTurn, reveal } = useGuestSession(network, code, saved)
+  const { status, room, nextTurn, reveal } = useGuestSession(network, code, saved)
 
   function renderBody() {
     if (status === 'connecting') {
@@ -72,21 +72,14 @@ export function GuestRoom({ network, languages, saved, code, onRetry, onChangeCo
 
     const pair = learningPair([room.host, room.guest])
     if (round === null) {
-      const { review } = room
+      const { writing } = room
       return (
         <>
           <PlayerChips pair={pair} languages={languages} me={2} />
-          {review === null ? (
+          {writing === null ? (
             <Waiting>Waiting for the host to choose a topic…</Waiting>
           ) : (
-            <RoundPreview
-              me={2}
-              review={review}
-              topicLabel={topicName(staticSource, review.topic)}
-              languages={languages}
-              onConfirm={confirm}
-              onRegenerate={regenerate}
-            />
+            <WritingSentences writing={writing} topicLabel={topicName(staticSource, writing.topic)} />
           )}
         </>
       )

@@ -34,29 +34,21 @@ describe('RoundOptionsFields', () => {
   })
 
   it('shows the options it is given', () => {
-    setup({ count: 3, difficulty: 'hard', review: true })
+    setup({ count: 3, difficulty: 'hard' })
     expect(screen.getByLabelText('Sentences per player')).toHaveValue('3')
     expect(screen.getByLabelText('Difficulty')).toHaveValue('hard')
   })
 
   it('reports a new number of sentences, keeping the other choices', async () => {
-    const { user, onChange } = setup({ count: 2, difficulty: 'easy', review: true })
+    const { user, onChange } = setup({ count: 2, difficulty: 'easy' })
     await user.selectOptions(screen.getByLabelText('Sentences per player'), '5')
-    expect(onChange).toHaveBeenCalledExactlyOnceWith({ count: 5, difficulty: 'easy', review: true })
-  })
-
-  it('does not review the sentences unless the host turns it on, and reports the change', async () => {
-    const { user, onChange } = setup()
-    const review = screen.getByLabelText('Review sentences before the round')
-    expect(review).not.toBeChecked()
-    await user.click(review)
-    expect(onChange).toHaveBeenCalledExactlyOnceWith({ ...DEFAULT_ROUND_OPTIONS, review: true })
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ count: 5, difficulty: 'easy' })
   })
 
   it('reports a new difficulty, keeping the other choices', async () => {
-    const { user, onChange } = setup({ count: 4, difficulty: 'medium', review: true })
+    const { user, onChange } = setup({ count: 4, difficulty: 'medium' })
     await user.selectOptions(screen.getByLabelText('Difficulty'), 'hard')
-    expect(onChange).toHaveBeenCalledExactlyOnceWith({ count: 4, difficulty: 'hard', review: true })
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ count: 4, difficulty: 'hard' })
   })
 
   it('has no translation switch, because translations are always on', () => {

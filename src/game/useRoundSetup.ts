@@ -8,13 +8,12 @@ import { buildSoloTurns, buildTurns, type Turn } from './buildTurns'
 export type RoundSetup =
   /** Picking a topic. */
   | { phase: 'choosing' }
-  /** Reviewing the sentences of the round before it starts. */
+  /** The AI is writing the sentences of the round, or failed to. */
   | {
-      phase: 'preview'
+      phase: 'writing'
       topic: GenerateTopic
       options: RoundOptions
-      turns: Turn[]
-      /** An AI request is running. */
+      /** An AI request is running; if not, it failed with `error`. */
       busy: boolean
       error: GenerationErrorKind | null
     }
@@ -25,27 +24,26 @@ interface RoundSetupOptions {
   /** One player: only sentences in their own language are written, and every turn is theirs. */
   solo?: boolean
   source?: ContentSource
-  /** Called instead of showing the sentences when the round's options say not to review them. */
-  onSkipReview?: (topic: GenerateTopic, turns: Turn[]) => void
+  /** Called with the sentences as soon as they are written, so the round can start. */
+  onReady: (topic: GenerateTopic, turns: Turn[]) => void
 }
 
 /**
- * The host's side of starting a round: pick a topic, review the AI's sentences (unless `options.review` is off),
- * optionally ask for new ones.
+ * The host's side of starting a round: pick a topic, and the AI's sentences are written and handed to `onReady`.
  * `players` is null until the partner has joined, and nothing can be chosen before then.
  * With `solo`, only the first player counts and there is no partner.
  */
 export function useRoundSetup(
   players: Players | null,
   generator: SentenceGenerator | undefined,
-  { solo = false, source = staticSource, onSkipReview }: RoundSetupOptions = {},
+  { solo = false, source = staticSource, onReady }: RoundSetupOptions,
 ) {
   const [state, setState] = useState<RoundSetup>(choosing)
   // The request that may still change the state; aborting it makes its result count for nothing.
   const current = useRef<AbortController | null>(null)
-  const skipReview = useRef(onSkipReview)
+  const ready = useRef(onReady)
   useEffect(() => {
-    skipReview.current = onSkipReview
+    ready.current = onReady
   })
 
   const stop = useCallback(() => {
@@ -73,23 +71,12 @@ export function useRoundSetup(
               options.count,
             )
         if (mine.signal.aborted) return
-        if (!options.review && skipReview.current) {
-          setState(choosing)
-          skipReview.current(topic, turns)
-          return
-        }
-        setState({
-          phase: 'preview',
-          topic,
-          options,
-          turns,
-          busy: false,
-          error: null,
-        })
+        setState(choosing)
+        ready.current(topic, turns)
       } catch (error) {
         if (mine.signal.aborted) return
         const kind = error instanceof GenerationError ? error.kind : 'unavailable'
-        setState((previous) => (previous.phase === 'preview' ? { ...previous, busy: false, error: kind } : previous))
+        setState((previous) => (previous.phase === 'writing' ? { ...previous, busy: false, error: kind } : previous))
       } finally {
         if (current.current === mine) current.current = null
       }
@@ -103,32 +90,24 @@ export function useRoundSetup(
       if (!generator || players === null) return
       const isPreset = source.getTopics().some((preset) => preset.id === topic)
       const chosen: GenerateTopic = isPreset ? { kind: 'preset', id: topic } : { kind: 'custom', text: topic }
-      setState({ phase: 'preview', topic: chosen, options, turns: [], busy: true, error: null })
+      setState({ phase: 'writing', topic: chosen, options, busy: true, error: null })
       void run(chosen, options, fresh)
     },
     [generator, players, run, source],
   )
 
-  /** Ask the AI for a new set of sentences for the topic being previewed. */
-  const regenerate = useCallback(() => {
-    if (!generator || state.phase !== 'preview' || state.busy) return
+  /** Ask again after a failure, for the same topic. */
+  const retry = useCallback(() => {
+    if (!generator || state.phase !== 'writing' || state.busy) return
     setState({ ...state, busy: true, error: null })
     void run(state.topic, state.options, true)
   }, [generator, run, state])
 
-  /** Stop a running request; the host keeps what they had, or goes back to the topics if they had nothing. */
-  const cancel = useCallback(() => {
-    stop()
-    setState((previous) => {
-      if (previous.phase !== 'preview') return previous
-      return previous.turns.length === 0 ? choosing : { ...previous, busy: false, error: null }
-    })
-  }, [stop])
-
+  /** Stop the request, or give up after a failure, and go back to choosing a topic. */
   const back = useCallback(() => {
     stop()
     setState(choosing)
   }, [stop])
 
-  return { state, choose, regenerate, cancel, back }
+  return { state, choose, retry, back }
 }

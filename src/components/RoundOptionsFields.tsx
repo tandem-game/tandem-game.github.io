@@ -19,8 +19,6 @@ const DIFFICULTY_NAMES: Record<Difficulty, string> = { easy: 'Easy', medium: 'Me
 
 const COUNT_HELP = 'How many sentences each of you reads aloud in a round, from 1 to 5.'
 
-const REVIEW_HELP = 'Off: the round starts as soon as the sentences are written. On: each player reads their own sentences first, and can ask for new ones.'
-
 const DIFFICULTY_HELP: Record<Difficulty, string> = {
   easy: 'short sentences of 4 to 7 words, in the present tense, with everyday words.',
   medium: 'everyday sentences of 4 to 12 words.',
@@ -30,7 +28,7 @@ const DIFFICULTY_HELP: Record<Difficulty, string> = {
 /** The host's choices for a round: how many sentences, and how hard. */
 export function RoundOptionsFields({ options, onChange, solo = false, withHelp = false, flags = {} }: RoundOptionsFieldsProps) {
   const id = useId()
-  type Key = 'count' | 'difficulty' | 'review'
+  type Key = 'count' | 'difficulty'
   const describedBy = (key: Key) => [withHelp && `${id}-${key}`, flags[key] && `${id}-${key}-flag`].filter(Boolean).join(' ') || undefined
   const flagged = (key: Key) => {
     const flag = flags[key]
@@ -87,23 +85,6 @@ export function RoundOptionsFields({ options, onChange, solo = false, withHelp =
           </ul>
         )}
         {flagged('difficulty')}
-      </div>
-      <div className="field" data-flag={flags.review}>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={options.review}
-            aria-describedby={describedBy('review')}
-            onChange={(e) => onChange({ ...options, review: e.target.checked })}
-          />
-          Review sentences before the round
-        </label>
-        {withHelp && (
-          <small id={`${id}-review`} className="help">
-            {REVIEW_HELP}
-          </small>
-        )}
-        {flagged('review')}
       </div>
     </fieldset>
   )

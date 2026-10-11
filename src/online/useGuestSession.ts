@@ -7,10 +7,6 @@ export interface GuestSession {
   status: 'connecting' | 'connected' | 'lost' | 'not-found' | 'unavailable'
   /** The host's latest copy of the game; null until the first one arrives. */
   room: RoomState | null
-  /** Says the sentences this player will read are fine. */
-  confirm: () => void
-  /** Asks the host for new sentences. */
-  regenerate: () => void
   nextTurn: () => void
   reveal: () => void
 }
@@ -65,8 +61,6 @@ export function useGuestSession(network: Network, code: string, languages: Playe
   return {
     status,
     room,
-    confirm: useCallback(() => send({ type: 'confirm' }), [send]),
-    regenerate: useCallback(() => send({ type: 'regenerate' }), [send]),
     nextTurn: useCallback(() => send({ type: 'next-turn' }), [send]),
     reveal: useCallback(() => send({ type: 'reveal' }), [send]),
   }

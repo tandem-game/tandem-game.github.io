@@ -10,7 +10,7 @@ import {
   suggestHostDefaults,
 } from './hostPreferences'
 
-const defaults = { knows: 'de', learns: 'en', options: { count: 4, difficulty: 'hard', review: true } } as const
+const defaults = { knows: 'de', learns: 'en', options: { count: 4, difficulty: 'hard' } } as const
 
 beforeEach(() => localStorage.clear())
 afterEach(() => vi.restoreAllMocks())
@@ -30,14 +30,22 @@ describe('host defaults', () => {
     expect(loadHostDefaults()).toEqual(defaults)
   })
 
-  it('saved before the review became optional still load, with the review off', () => {
-    localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ ...defaults, options: { count: 4, difficulty: 'hard' } }))
-    expect(loadHostDefaults()).toEqual({ ...defaults, options: { ...defaults.options, review: false } })
+  it('saved while there was a review setting still load, without it', () => {
+    localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ ...defaults, options: { ...defaults.options, review: true } }))
+    expect(loadHostDefaults()).toEqual(defaults)
+    expect(loadSettingsStatus()).toEqual({ kind: 'complete', defaults })
   })
 
-  it('keep a host who turned the review on', () => {
+  it('ignore a review flag of any kind, since there is no review any more', () => {
+    for (const review of ['no', 1, null]) {
+      localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ ...defaults, options: { ...defaults.options, review } }))
+      expect(loadHostDefaults()).toEqual(defaults)
+    }
+  })
+
+  it('save without a review flag', () => {
     saveHostDefaults(defaults)
-    expect(loadHostDefaults()).toEqual(defaults)
+    expect(JSON.parse(localStorage.getItem('tandem.hostDefaults.v2') ?? '{}').options).toEqual(defaults.options)
   })
 
   it.each([
@@ -52,7 +60,6 @@ describe('host defaults', () => {
     ['a count above the maximum', JSON.stringify({ ...defaults, options: { ...defaults.options, count: 6 } })],
     ['a fractional count', JSON.stringify({ ...defaults, options: { ...defaults.options, count: 2.5 } })],
     ['an unknown difficulty', JSON.stringify({ ...defaults, options: { ...defaults.options, difficulty: 'insane' } })],
-    ['a review flag that is not a boolean', JSON.stringify({ ...defaults, options: { ...defaults.options, review: 'no' } })],
     ['missing options', JSON.stringify({ knows: 'en' })],
   ])('are ignored when the stored value is %s', (_, stored) => {
     localStorage.setItem('tandem.hostDefaults.v2', stored)
@@ -98,7 +105,7 @@ describe('settings status', () => {
     store({ knows: 'de', options: { count: 4 } })
     expect(loadSettingsStatus()).toEqual({
       kind: 'incomplete',
-      draft: { knows: 'de', learns: '', options: { count: 4, difficulty: 'medium', review: false } },
+      draft: { knows: 'de', learns: '', options: { count: 4, difficulty: 'medium' } },
       missing: ['learns', 'difficulty'],
       fresh: [],
     })
@@ -114,19 +121,14 @@ describe('settings status', () => {
     expect(loadSettingsStatus()).toMatchObject({ kind: 'incomplete', draft: { knows: 'de', learns: '' }, missing: ['learns'] })
   })
 
-  it('asks again about a review flag that is not a boolean', () => {
-    store({ ...defaults, options: { ...defaults.options, review: 'no' } })
-    expect(loadSettingsStatus()).toMatchObject({ kind: 'incomplete', missing: ['review'] })
-  })
-
   describe('when a setting is added later', () => {
-    const addedInTwo = { review: 2 } as const
+    const addedInTwo = { difficulty: 2 } as const
 
     it('is incomplete, with the new setting listed and everything else kept, for a save from before it', () => {
       store(defaults) // no version: version 1
-      expect(loadSettingsStatus(addedInTwo)).toEqual({ kind: 'incomplete', draft: defaults, missing: [], fresh: ['review'] })
+      expect(loadSettingsStatus(addedInTwo)).toEqual({ kind: 'incomplete', draft: defaults, missing: [], fresh: ['difficulty'] })
       store({ version: 1, ...defaults })
-      expect(loadSettingsStatus(addedInTwo)).toMatchObject({ kind: 'incomplete', fresh: ['review'] })
+      expect(loadSettingsStatus(addedInTwo)).toMatchObject({ kind: 'incomplete', fresh: ['difficulty'] })
     })
 
     it('is complete once saved by an app that has it, so they are asked only once', () => {
@@ -147,7 +149,7 @@ describe('settings status', () => {
     it('treats a version that is not a whole number from 1 as 1', () => {
       for (const version of [0, -1, 1.5, '2', null]) {
         store({ version, ...defaults })
-        expect(loadSettingsStatus(addedInTwo)).toMatchObject({ kind: 'incomplete', fresh: ['review'] })
+        expect(loadSettingsStatus(addedInTwo)).toMatchObject({ kind: 'incomplete', fresh: ['difficulty'] })
       }
     })
   })

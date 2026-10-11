@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { GenerationError, type SentenceGenerator } from '../generation/generator'
 import type { GeneratedSentences, GenerateRequest, GenerationErrorKind } from '../generation/types'
+import type { Turn } from './buildTurns'
 import { useRoundSetup } from './useRoundSetup'
 
 // The host speaks German and learns English, the guest the other way round.
@@ -35,25 +36,24 @@ function manualGenerator() {
 }
 
 const preset = 'greetings'
+const options = { count: 2, difficulty: 'medium' } as const
 
-/** A hook whose host has chosen the preset and been shown the AI's first sentences. */
-async function previewing() {
+/** A hook with nothing chosen yet, and a spy for the sentences it hands over once they are written. */
+function start(who: Parameters<typeof useRoundSetup>[0] = players, solo = false) {
   const manual = manualGenerator()
-  const { result } = renderHook(() => useRoundSetup(players, manual.generator))
-  act(() => result.current.choose(preset))
-  act(() => manual.answerAll())
-  await waitFor(() => expect(result.current.state).toMatchObject({ phase: 'preview', busy: false }))
-  return { ...manual, result }
-}
-
-/** A hook with nothing chosen yet. */
-function start() {
-  const manual = manualGenerator()
-  const { result } = renderHook(() => useRoundSetup(players, manual.generator))
-  return { ...manual, result }
+  const onReady = vi.fn<(topic: unknown, turns: Turn[]) => void>()
+  const { result, unmount } = renderHook(() =>
+    useRoundSetup(who, manual.generator, { solo, onReady }),
+  )
+  return { ...manual, result, unmount, onReady }
 }
 
 describe('useRoundSetup', () => {
+  it('starts by letting the host choose', () => {
+    const { result } = start()
+    expect(result.current.state).toEqual({ phase: 'choosing' })
+  })
+
   it('asks for stored sentences by default and for fresh ones when told to', () => {
     const { result, pending } = start()
     act(() => result.current.choose(preset))
@@ -64,232 +64,179 @@ describe('useRoundSetup', () => {
     expect(pending.map((p) => p.request.fresh)).toEqual([true, true])
   })
 
-  it('starts by letting the host choose', () => {
-    const { result } = renderHook(() => useRoundSetup(players, manualGenerator().generator))
-    expect(result.current.state).toEqual({ phase: 'choosing' })
-  })
-
   it('does nothing until the partner has joined', () => {
     const { generator, pending } = manualGenerator()
-    const { result } = renderHook(() => useRoundSetup(null, generator))
+    const onReady = vi.fn()
+    const { result } = renderHook(() => useRoundSetup(null, generator, { onReady }))
     act(() => result.current.choose(preset))
     act(() => result.current.choose('my pet dragon'))
     expect(result.current.state).toEqual({ phase: 'choosing' })
     expect(pending).toHaveLength(0)
   })
 
+  it('does nothing without a generator', () => {
+    const { result } = renderHook(() => useRoundSetup(players, undefined, { onReady: vi.fn() }))
+    act(() => result.current.choose(preset))
+    act(() => result.current.choose('my pet dragon'))
+    expect(result.current.state).toEqual({ phase: 'choosing' })
+  })
+
   describe('choosing a preset topic', () => {
-    it('asks the AI for both languages straight away and previews the result', async () => {
-      const { generator, pending, answerAll } = manualGenerator()
-      const { result } = renderHook(() => useRoundSetup(players, generator))
+    it('asks the AI for both languages straight away and hands over the turns once they are written', async () => {
+      const { pending, answerAll, result, onReady } = start()
       act(() => result.current.choose(preset))
 
-      expect(result.current.state).toMatchObject({ phase: 'preview', topic: { kind: 'preset', id: preset }, busy: true, turns: [] })
+      expect(result.current.state).toMatchObject({ phase: 'writing', topic: { kind: 'preset', id: preset }, busy: true, error: null })
       expect(pending.map((p) => [p.request.language, p.request.topic, p.request.fresh]).sort()).toEqual([
         ['de', { kind: 'preset', id: preset }, false],
         ['en', { kind: 'preset', id: preset }, false],
       ])
+      expect(onReady).not.toHaveBeenCalled()
 
-      act(() => answerAll())
-      await waitFor(() => expect(result.current.state).toMatchObject({ busy: false, error: null }))
-      const { state } = result.current
-      if (state.phase !== 'preview') throw new Error('expected a preview')
-      expect(state.turns.map((turn) => turn.player)).toEqual([1, 2, 1, 2])
+      await act(async () => answerAll())
+      expect(onReady).toHaveBeenCalledExactlyOnceWith({ kind: 'preset', id: preset }, expect.any(Array))
+      const turns = onReady.mock.calls[0][1]
+      expect(turns.map((turn) => turn.player)).toEqual([1, 2, 1, 2])
+      expect(result.current.state).toEqual({ phase: 'choosing' })
     })
 
     it('treats text that is not a preset id as a custom topic', () => {
-      const { generator, pending } = manualGenerator()
-      const { result } = renderHook(() => useRoundSetup(players, generator))
+      const { pending, result } = start()
       act(() => result.current.choose('greetings and more'))
       expect(result.current.state).toMatchObject({ topic: { kind: 'custom', text: 'greetings and more' } })
       expect(pending.every((p) => p.request.topic.kind === 'custom')).toBe(true)
     })
-
-    it('does nothing without a generator', () => {
-      const { result } = renderHook(() => useRoundSetup(players, undefined))
-      act(() => result.current.choose(preset))
-      act(() => result.current.choose('my pet dragon'))
-      expect(result.current.state).toEqual({ phase: 'choosing' })
-    })
   })
 
   describe('round options', () => {
-    it('asks for the chosen number of sentences and translations, and builds that many turns', async () => {
-      const { result, pending } = start()
-      act(() => result.current.choose(preset, { count: 1, difficulty: 'medium', review: true }))
+    it('asks for the chosen number of sentences and builds that many turns', async () => {
+      const { result, pending, onReady } = start()
+      act(() => result.current.choose(preset, { count: 1, difficulty: 'medium' }))
       expect(pending.map((p) => p.request)).toEqual(
         expect.arrayContaining([expect.objectContaining({ count: 1, difficulty: 'medium' })]),
       )
-      act(() => {
-        for (const p of pending.splice(0)) p.resolve({ sentences: [(p.request.language === 'de' ? german : english)[0]], translations: [(p.request.language === 'de' ? english : german)[0]] })
+      expect(result.current.state).toMatchObject({ options: { count: 1, difficulty: 'medium' } })
+      await act(async () => {
+        for (const p of pending.splice(0)) {
+          p.resolve({
+            sentences: [(p.request.language === 'de' ? german : english)[0]],
+            translations: [(p.request.language === 'de' ? english : german)[0]],
+          })
+        }
       })
-      await waitFor(() => expect(result.current.state).toMatchObject({ busy: false }))
-      expect(result.current.state).toMatchObject({ options: { count: 1, difficulty: 'medium', review: true } })
-      expect(result.current.state.phase === 'preview' && result.current.state.turns).toHaveLength(2)
+      expect(onReady.mock.calls[0][1]).toHaveLength(2)
     })
 
-    it('keeps the options, difficulty included, when it asks for new sentences', async () => {
-      const { result, pending } = start()
-      act(() => result.current.choose(preset, { count: 3, difficulty: 'hard', review: true }))
-      act(() => pending.splice(0).forEach((p) => p.reject(new GenerationError('unavailable'))))
-      await waitFor(() => expect(result.current.state).toMatchObject({ busy: false, error: 'unavailable' }))
-      act(() => result.current.regenerate())
+    it('keeps the options, difficulty included, when it tries again', async () => {
+      const { result, pending, failAll } = start()
+      act(() => result.current.choose(preset, { count: 3, difficulty: 'hard' }))
+      await act(async () => failAll('unavailable'))
+      expect(result.current.state).toMatchObject({ busy: false, error: 'unavailable' })
+      act(() => result.current.retry())
       expect(pending.map((p) => p.request)).toEqual(
         expect.arrayContaining([expect.objectContaining({ count: 3, difficulty: 'hard', fresh: true })]),
       )
     })
   })
 
-  describe('regenerating with the AI', () => {
-    it('keeps showing the current sentences while it works, then swaps in the new ones', async () => {
-      const { pending, answerAll, result } = await previewing()
-      const before = result.current.state.phase === 'preview' ? result.current.state.turns : []
-
-      act(() => result.current.regenerate())
-      expect(result.current.state).toMatchObject({ phase: 'preview', busy: true, turns: before })
-      expect(pending.map((p) => p.request)).toEqual(
-        expect.arrayContaining([
-          { language: 'de', topic: { kind: 'preset', id: preset }, fresh: true, count: 2, difficulty: 'medium' },
-          { language: 'en', topic: { kind: 'preset', id: preset }, fresh: true, count: 2, difficulty: 'medium' },
-        ]),
-      )
-
-      act(() => answerAll())
-      await waitFor(() => expect(result.current.state).toMatchObject({ busy: false }))
-      const { state } = result.current
-      if (state.phase !== 'preview') throw new Error('expected a preview')
-      // Player 1 learns English, so reads German; Player 2 reads English.
-      expect(state.turns.map((turn) => turn.sentence.text).sort()).toEqual([...german, ...english].sort())
-    })
-
-    it('keeps the previous sentences and reports why when it fails', async () => {
-      const { failAll, result } = await previewing()
-      const before = result.current.state.phase === 'preview' ? result.current.state.turns : []
-
-      act(() => result.current.regenerate())
-      act(() => failAll('limit-reached'))
-      await waitFor(() => expect(result.current.state).toMatchObject({ busy: false, error: 'limit-reached' }))
-      expect(result.current.state).toMatchObject({ turns: before })
+  describe('when the sentences cannot be written', () => {
+    it.each<GenerationErrorKind>(['unavailable', 'limit-reached', 'invalid'])('reports %s and hands over nothing', async (kind) => {
+      const { result, failAll, onReady } = start()
+      act(() => result.current.choose('my pet dragon'))
+      await act(async () => failAll(kind))
+      expect(result.current.state).toMatchObject({ phase: 'writing', busy: false, error: kind })
+      expect(onReady).not.toHaveBeenCalled()
     })
 
     it('treats an unexpected failure as the service being unavailable', async () => {
       const generator: SentenceGenerator = { generate: () => Promise.reject(new Error('boom')) }
-      const { result } = renderHook(() => useRoundSetup(players, generator))
+      const { result } = renderHook(() => useRoundSetup(players, generator, { onReady: vi.fn() }))
       act(() => result.current.choose(preset))
       await waitFor(() => expect(result.current.state).toMatchObject({ error: 'unavailable' }))
     })
 
-    it('clears an earlier error when it tries again', async () => {
-      const { failAll, answerAll, result } = await previewing()
-      act(() => result.current.regenerate())
-      act(() => failAll('unavailable'))
-      await waitFor(() => expect(result.current.state).toMatchObject({ error: 'unavailable' }))
+    it('tries again for new sentences, clearing the error, and hands them over', async () => {
+      const { failAll, answerAll, result, pending, onReady } = start()
+      act(() => result.current.choose(preset))
+      await act(async () => failAll('unavailable'))
 
-      act(() => result.current.regenerate())
+      act(() => result.current.retry())
       expect(result.current.state).toMatchObject({ busy: true, error: null })
-      act(() => answerAll())
-      await waitFor(() => expect(result.current.state).toMatchObject({ busy: false, error: null }))
+      expect(pending.map((p) => p.request.fresh)).toEqual([true, true])
+      await act(async () => answerAll())
+      expect(onReady).toHaveBeenCalledOnce()
     })
 
-    it('ignores a second request while one is running', async () => {
-      const { pending, result } = await previewing()
-      act(() => result.current.regenerate())
-      act(() => result.current.regenerate())
+    it('ignores a retry while a request is running, or when nothing was chosen', () => {
+      const { pending, result } = start()
+      act(() => result.current.retry())
+      expect(pending).toHaveLength(0)
+
+      act(() => result.current.choose(preset))
+      act(() => result.current.retry())
       expect(pending).toHaveLength(2) // one per language, not four
     })
   })
 
-  describe('cancelling', () => {
-    it('stops the request and keeps the current sentences, without an error', async () => {
-      const { pending, result } = await previewing()
-      const before = result.current.state.phase === 'preview' ? result.current.state.turns : []
-      act(() => result.current.regenerate())
-      const signals = pending.map((p) => p.signal)
-
-      act(() => result.current.cancel())
-      expect(signals.every((signal) => signal?.aborted)).toBe(true)
-      expect(result.current.state).toMatchObject({ phase: 'preview', busy: false, error: null, turns: before })
-    })
-
-    it('ignores an answer that arrives after cancelling', async () => {
-      const { answerAll, result } = await previewing()
-      const before = result.current.state
-      act(() => result.current.regenerate())
-      act(() => result.current.cancel())
-      await act(async () => answerAll())
-      expect(result.current.state).toEqual(before)
-    })
-
-    it('ignores a failure that arrives after cancelling', async () => {
-      const { failAll, result } = await previewing()
-      const before = result.current.state
-      act(() => result.current.regenerate())
-      act(() => result.current.cancel())
-      await act(async () => failAll('cancelled'))
-      expect(result.current.state).toEqual(before)
-    })
-
-    it('goes back to choosing when there is nothing to fall back on', () => {
-      const { generator } = manualGenerator()
-      const { result } = renderHook(() => useRoundSetup(players, generator))
-      act(() => result.current.choose('my pet dragon'))
-      act(() => result.current.cancel())
-      expect(result.current.state).toEqual({ phase: 'choosing' })
-    })
-  })
-
-  describe('a custom topic', () => {
-    it('generates straight away and previews the result', async () => {
-      const { generator, pending, answerAll } = manualGenerator()
-      const { result } = renderHook(() => useRoundSetup(players, generator))
-      act(() => result.current.choose('my pet dragon'))
-      expect(result.current.state).toMatchObject({
-        phase: 'preview', topic: { kind: 'custom', text: 'my pet dragon' }, busy: true, turns: [],
-      })
-      expect(pending.map((p) => p.request.fresh)).toEqual([false, false])
-
-      act(() => answerAll())
-      await waitFor(() => expect(result.current.state).toMatchObject({ busy: false }))
-    })
-
-    it('reports a failure with nothing to show, so the host can try again or choose another topic', async () => {
-      const { generator, failAll } = manualGenerator()
-      const { result } = renderHook(() => useRoundSetup(players, generator))
-      act(() => result.current.choose('my pet dragon'))
-      act(() => failAll('invalid'))
-      await waitFor(() => expect(result.current.state).toMatchObject({ busy: false, error: 'invalid', turns: [] }))
-    })
-  })
-
   describe('leaving', () => {
-    it('back() stops any request and returns to choosing', () => {
-      const { generator, pending } = manualGenerator()
-      const { result } = renderHook(() => useRoundSetup(players, generator))
+    it('back() stops the request, returns to choosing, and ignores a late answer', async () => {
+      const { pending, result, answerAll, onReady } = start()
       act(() => result.current.choose(preset))
-      act(() => result.current.regenerate())
+      const signals = pending.map((p) => p.signal)
       act(() => result.current.back())
-      expect(pending.every((p) => p.signal?.aborted)).toBe(true)
+      expect(signals.every((signal) => signal?.aborted)).toBe(true)
       expect(result.current.state).toEqual({ phase: 'choosing' })
+
+      await act(async () => answerAll())
+      expect(onReady).not.toHaveBeenCalled()
+      expect(result.current.state).toEqual({ phase: 'choosing' })
+    })
+
+    it('ignores a failure that arrives after going back', async () => {
+      const { result, failAll } = start()
+      act(() => result.current.choose(preset))
+      act(() => result.current.back())
+      await act(async () => failAll('cancelled'))
+      expect(result.current.state).toEqual({ phase: 'choosing' })
+    })
+
+    it('back() after a failure returns to choosing', async () => {
+      const { result, failAll } = start()
+      act(() => result.current.choose(preset))
+      await act(async () => failAll('invalid'))
+      act(() => result.current.back())
+      expect(result.current.state).toEqual({ phase: 'choosing' })
+    })
+
+    it('does not count an answer to an earlier request once a new topic was chosen', async () => {
+      const { result, pending, answerAll, onReady } = start()
+      act(() => result.current.choose(preset))
+      const first = pending.splice(0)
+      act(() => result.current.choose('my pet dragon'))
+      await act(async () => {
+        for (const p of first) p.resolve({ sentences: german, translations: english })
+      })
+      expect(onReady).not.toHaveBeenCalled()
+
+      await act(async () => answerAll())
+      expect(onReady).toHaveBeenCalledExactlyOnceWith({ kind: 'custom', text: 'my pet dragon' }, expect.any(Array))
     })
 
     it('stops the request when the screen goes away', () => {
-      const { generator, pending } = manualGenerator()
-      const { result, unmount } = renderHook(() => useRoundSetup(players, generator))
+      const { pending, result, unmount } = start()
       act(() => result.current.choose(preset))
-      act(() => result.current.regenerate())
       unmount()
       expect(pending.every((p) => p.signal?.aborted)).toBe(true)
     })
 
-    it('does not update after unmounting when a late answer arrives', async () => {
+    it('does not update, or hand anything over, after unmounting when a late answer arrives', async () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const { generator, answerAll } = manualGenerator()
-      const { result, unmount } = renderHook(() => useRoundSetup(players, generator))
+      const { result, unmount, answerAll, onReady } = start()
       act(() => result.current.choose(preset))
-      act(() => result.current.regenerate())
       unmount()
       await act(async () => answerAll())
       expect(spy).not.toHaveBeenCalled()
+      expect(onReady).not.toHaveBeenCalled()
       spy.mockRestore()
     })
   })
@@ -300,22 +247,19 @@ describe('useRoundSetup when both players speak the same language', () => {
   const moreGerman = ['Wir fahren morgen nach Berlin.', 'Sie hat einen kleinen Hund.']
 
   it('asks for German twice, the second time for new sentences, and gives each player different sentences to translate into English', async () => {
-    const manual = manualGenerator()
-    const { result } = renderHook(() => useRoundSetup(bothGerman, manual.generator))
-    act(() => result.current.choose(preset, { count: 2, difficulty: 'medium', review: true }))
+    const { result, pending, onReady } = start(bothGerman)
+    act(() => result.current.choose(preset, options))
 
-    expect(manual.pending.map((p) => [p.request.language, p.request.fresh])).toEqual([['de', false], ['de', true]])
-    act(() => {
-      const [first, second] = manual.pending.splice(0)
+    expect(pending.map((p) => [p.request.language, p.request.fresh])).toEqual([['de', false], ['de', true]])
+    await act(async () => {
+      const [first, second] = pending.splice(0)
       first.resolve({ sentences: german, translations: english })
       second.resolve({ sentences: moreGerman, translations: english })
     })
-    await waitFor(() => expect(result.current.state).toMatchObject({ phase: 'preview', busy: false }))
 
-    const { state } = result.current
-    if (state.phase !== 'preview') throw new Error('expected a preview')
-    expect(state.turns.map((turn) => [turn.player, turn.learning])).toEqual([[1, 'en'], [2, 'en'], [1, 'en'], [2, 'en']])
-    const texts = state.turns.map((turn) => turn.sentence.text)
+    const turns = onReady.mock.calls[0][1]
+    expect(turns.map((turn) => [turn.player, turn.learning])).toEqual([[1, 'en'], [2, 'en'], [1, 'en'], [2, 'en']])
+    const texts = turns.map((turn) => turn.sentence.text)
     expect(new Set(texts).size).toBe(4)
     expect(texts.sort()).toEqual([...german, ...moreGerman].sort())
   })
@@ -325,114 +269,42 @@ describe('useRoundSetup for one player', () => {
   // The player speaks German and learns English; the second player is not used.
   const me = { knows: 'de', learns: 'en' } as const
   const solo = [me, me] as const
-  const options = { count: 2, difficulty: 'medium', review: true } as const
-
-  function startSolo() {
-    const manual = manualGenerator()
-    const { result } = renderHook(() => useRoundSetup(solo, manual.generator, { solo: true }))
-    return { ...manual, result }
-  }
 
   it('asks only for sentences in the language the player speaks', async () => {
-    const { result, pending, answerAll } = startSolo()
+    const { result, pending, answerAll, onReady } = start(solo, true)
     act(() => result.current.choose(preset, options))
-
     expect(pending.map((p) => p.request.language)).toEqual(['de'])
-    act(() => answerAll())
-    await waitFor(() => expect(result.current.state).toMatchObject({ phase: 'preview', busy: false }))
+    await act(async () => answerAll())
+    expect(onReady).toHaveBeenCalledOnce()
   })
 
-  it('makes every turn the player\'s, reading German and translating into English', async () => {
-    const { result, answerAll } = startSolo()
+  it("makes every turn the player's, reading German and translating into English", async () => {
+    const { result, answerAll, onReady } = start(solo, true)
     act(() => result.current.choose(preset, options))
-    act(() => answerAll())
-    await waitFor(() => expect(result.current.state).toMatchObject({ phase: 'preview', busy: false }))
+    await act(async () => answerAll())
 
-    const { turns } = result.current.state as Extract<typeof result.current.state, { phase: 'preview' }>
+    const turns = onReady.mock.calls[0][1]
     expect(turns).toHaveLength(2)
     expect(turns.every((turn) => turn.player === 1 && turn.learning === 'en')).toBe(true)
     expect(turns.map((turn) => turn.sentence.text).sort()).toEqual([...german].sort())
   })
 
-  it('asks for one new request when regenerating, skipping the stored sentences', async () => {
-    const { result, pending, answerAll } = startSolo()
+  it('asks for one new request when trying again, skipping the stored sentences', async () => {
+    const { result, pending, failAll } = start(solo, true)
     act(() => result.current.choose(preset, options))
-    act(() => answerAll())
-    await waitFor(() => expect(result.current.state).toMatchObject({ busy: false }))
+    await act(async () => failAll('limit-reached'))
+    expect(result.current.state).toMatchObject({ busy: false, error: 'limit-reached' })
 
-    act(() => result.current.regenerate())
+    act(() => result.current.retry())
     expect(pending).toHaveLength(1)
     expect(pending[0].request).toMatchObject({ language: 'de', fresh: true })
   })
 
-  it('keeps the error and lets the player try again', async () => {
-    const { result, failAll, pending } = startSolo()
+  it('stops the running request when the player goes back', () => {
+    const { result, pending } = start(solo, true)
     act(() => result.current.choose(preset, options))
-    act(() => failAll('limit-reached'))
-    await waitFor(() => expect(result.current.state).toMatchObject({ busy: false, error: 'limit-reached' }))
-
-    act(() => result.current.regenerate())
-    expect(pending).toHaveLength(1)
-  })
-
-  it('stops the running request when cancelled', () => {
-    const { result, pending } = startSolo()
-    act(() => result.current.choose(preset, options))
-    act(() => result.current.cancel())
+    act(() => result.current.back())
     expect(pending[0].signal?.aborted).toBe(true)
-    expect(result.current.state).toEqual({ phase: 'choosing' })
-  })
-})
-
-describe('useRoundSetup without a review', () => {
-  const noReview = { count: 2, difficulty: 'medium', review: false } as const
-
-  function start(onSkipReview = vi.fn()) {
-    const manual = manualGenerator()
-    const { result } = renderHook(() => useRoundSetup(players, manual.generator, { onSkipReview }))
-    return { ...manual, result, onSkipReview }
-  }
-
-  it('hands the sentences over instead of showing them, and goes back to choosing', async () => {
-    const { result, answerAll, onSkipReview } = start()
-    act(() => result.current.choose(preset, noReview))
-    expect(result.current.state).toMatchObject({ phase: 'preview', busy: true })
-    await act(async () => answerAll())
-
-    expect(onSkipReview).toHaveBeenCalledExactlyOnceWith(
-      { kind: 'preset', id: preset },
-      expect.arrayContaining([expect.objectContaining({ player: 1 })]),
-    )
-    expect(onSkipReview.mock.calls[0][1]).toHaveLength(4)
-    expect(result.current.state).toEqual({ phase: 'choosing' })
-  })
-
-  it('still shows the review when it is on', async () => {
-    const { result, answerAll, onSkipReview } = start()
-    act(() => result.current.choose(preset, { ...noReview, review: true }))
-    await act(async () => answerAll())
-    expect(onSkipReview).not.toHaveBeenCalled()
-    expect(result.current.state).toMatchObject({ phase: 'preview', busy: false })
-  })
-
-  it('shows the error, with a way to try again, when the sentences cannot be written', async () => {
-    const { result, failAll, answerAll, onSkipReview } = start()
-    act(() => result.current.choose(preset, noReview))
-    await act(async () => failAll('unavailable'))
-    expect(result.current.state).toMatchObject({ phase: 'preview', busy: false, error: 'unavailable' })
-    expect(onSkipReview).not.toHaveBeenCalled()
-
-    act(() => result.current.regenerate())
-    await act(async () => answerAll())
-    expect(onSkipReview).toHaveBeenCalledOnce()
-  })
-
-  it('hands over nothing when the host cancels', async () => {
-    const { result, answerAll, onSkipReview } = start()
-    act(() => result.current.choose(preset, noReview))
-    act(() => result.current.cancel())
-    await act(async () => answerAll())
-    expect(onSkipReview).not.toHaveBeenCalled()
     expect(result.current.state).toEqual({ phase: 'choosing' })
   })
 })

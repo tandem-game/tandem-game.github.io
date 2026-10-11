@@ -3,16 +3,13 @@ import type { Turn } from '../game/buildTurns'
 import type { GameState } from '../game/gameReducer'
 import { GENERATION_ERROR_KINDS, type GenerationErrorKind } from '../generation/types'
 
-/** The sentences the players are checking before a round, shown to both devices. */
-export interface ReviewState {
+/** The sentences being written for a round, shown to both devices; the round starts by itself once they are. */
+export interface WritingState {
   /** A preset topic's id or the text the host typed. */
   topic: string
-  turns: Turn[]
-  /** The host is waiting for the AI. */
+  /** The host is waiting for the AI; if not, the request failed with `error`. */
   busy: boolean
   error: GenerationErrorKind | null
-  /** Whether Player 1 and Player 2 have said their own sentences are fine. */
-  confirmed: readonly [boolean, boolean]
 }
 
 /** Everything both devices need to show the same screen. The host owns it. */
@@ -20,9 +17,9 @@ export interface RoomState {
   host: PlayerLanguages
   /** null until the guest has joined; then what they read and translate into, which the host decided (see `resolvePlayers`). */
   guest: PlayerLanguages | null
-  /** The sentences being checked; null unless the host has chosen a topic and no round is running. */
-  review: ReviewState | null
-  /** null while the host is choosing a topic or the players are reviewing. */
+  /** The sentences being written; null unless the host has chosen a topic and no round is running. */
+  writing: WritingState | null
+  /** null while the host is choosing a topic or the sentences are being written. */
   round: { topic: string; game: GameState } | null
 }
 
@@ -31,8 +28,6 @@ export type HostMessage = { type: 'state'; state: RoomState }
 export type GuestMessage =
   /** The guest's saved settings, sent once they are connected; null when they are missing or unusable. */
   | { type: 'hello'; languages: PlayerLanguages | null }
-  | { type: 'confirm' }
-  | { type: 'regenerate' }
   | { type: 'next-turn' }
   | { type: 'reveal' }
 
@@ -88,29 +83,12 @@ function parseGame(raw: unknown): GameState | null {
   return { turns, index, status, revealed }
 }
 
-function parseReview(raw: unknown): ReviewState | null {
-  if (!isRecord(raw) || !isText(raw.topic) || !Array.isArray(raw.turns) || raw.turns.length > MAX_TURNS) {
-    return null
-  }
-  const turns: Turn[] = []
-  for (const item of raw.turns) {
-    const turn = parseTurn(item)
-    if (!turn) return null
-    turns.push(turn)
-  }
-  const { busy, error, confirmed } = raw
+function parseWriting(raw: unknown): WritingState | null {
+  if (!isRecord(raw) || !isText(raw.topic)) return null
+  const { busy, error } = raw
   if (typeof busy !== 'boolean') return null
   if (error !== null && !GENERATION_ERROR_KINDS.some((kind) => kind === error)) return null
-  if (!Array.isArray(confirmed) || confirmed.length !== 2 || confirmed.some((flag) => typeof flag !== 'boolean')) {
-    return null
-  }
-  return {
-    topic: raw.topic,
-    turns,
-    busy,
-    error: error as GenerationErrorKind | null,
-    confirmed: [confirmed[0], confirmed[1]],
-  }
+  return { topic: raw.topic, busy, error: error as GenerationErrorKind | null }
 }
 
 function parseRoomState(raw: unknown): RoomState | null {
@@ -119,10 +97,9 @@ function parseRoomState(raw: unknown): RoomState | null {
   const { round } = raw
   const guest = raw.guest === null ? null : parseLanguages(raw.guest)
   if (host === null || (raw.guest !== null && guest === null)) return null
-  // A host that has not been updated yet sends no review, which means there is none.
-  const review = raw.review === undefined || raw.review === null ? null : parseReview(raw.review)
-  if (raw.review !== undefined && raw.review !== null && review === null) return null
-  const common = { host, guest, review }
+  const writing = raw.writing === null ? null : parseWriting(raw.writing)
+  if (raw.writing !== null && writing === null) return null
+  const common = { host, guest, writing }
   if (round === null) return { ...common, round: null }
   if (!isRecord(round) || !isText(round.topic)) return null
   const game = parseGame(round.game)
@@ -140,7 +117,5 @@ export function parseGuestMessage(raw: unknown): GuestMessage | null {
   if (raw.type === 'hello') return { type: 'hello', languages: parseLanguages(raw.languages) }
   if (raw.type === 'next-turn') return { type: 'next-turn' }
   if (raw.type === 'reveal') return { type: 'reveal' }
-  if (raw.type === 'confirm') return { type: 'confirm' }
-  if (raw.type === 'regenerate') return { type: 'regenerate' }
   return null
 }

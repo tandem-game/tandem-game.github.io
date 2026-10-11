@@ -5,13 +5,11 @@ import { saveHostDefaults } from '../game/hostPreferences'
 import {
   SAVED_DEFAULTS,
   chooseTopic,
-  confirmSentences,
   createGame,
   currentStep,
   joinGame,
   languages,
   open,
-  reviewing,
   sentenceOn,
   startJoining,
   startRound,
@@ -56,7 +54,7 @@ describe('OnlineGame menu', () => {
 })
 
 describe('playing alone', () => {
-  it('sets the round up, reviews the sentences and plays them, then leaves back to the start', async () => {
+  it('sets the round up, plays the sentences as soon as they are written, then leaves back to the start', async () => {
     const user = userEvent.setup()
     const { generator, asked } = instantGenerator()
     const { ui, container } = open(createMemoryNetwork(), generator)
@@ -64,7 +62,7 @@ describe('playing alone', () => {
     await user.click(ui.getByRole('button', { name: 'Weather' }))
     await user.click(ui.getByRole('button', { name: 'Start' }))
 
-    await user.click(await ui.findByRole('button', { name: 'Looks good' }))
+    await ui.findByText(/^Turn 1 of/)
     expect(german).toContain(sentenceOn({ container }))
     await user.click(ui.getByRole('button', { name: 'Show translation' }))
     await user.click(ui.getByRole('button', { name: 'Next turn' }))
@@ -94,7 +92,7 @@ describe('playing alone', () => {
     await user.click(ui.getByRole('button', { name: '1 player' }))
     await user.click(ui.getByRole('button', { name: 'Weather' }))
     await user.click(ui.getByRole('button', { name: 'Start' }))
-    await ui.findByRole('button', { name: 'Looks good' })
+    await ui.findByText(/^Turn 1 of/)
 
     expect(host).not.toHaveBeenCalled()
     expect(join).not.toHaveBeenCalled()
@@ -109,14 +107,13 @@ describe('playing a whole round on two devices', () => {
     expect(await host.ui.findByText(/waiting for your partner to join/i)).toBeInTheDocument()
 
     const guest = await joinGame(network, user, host.code)
-    await reviewing(host)
-    expect(await guest.ui.findByRole('heading', { name: 'Review your sentences' })).toBeInTheDocument()
+    await startRound(host, guest)
     expect(host.ui.getByText('You are learning English')).toBeInTheDocument()
     expect(host.ui.getByText('Your partner is learning German')).toBeInTheDocument()
     expect(guest.ui.getByText('You are learning German')).toBeInTheDocument()
     expect(guest.ui.getByText('Your partner is learning English')).toBeInTheDocument()
 
-    await startRound(host, guest, user)
+    await startRound(host, guest)
     await host.ui.findByText('Turn 1 of 4')
     await guest.ui.findByText('Turn 1 of 4')
 
@@ -147,7 +144,7 @@ describe('playing a whole round on two devices', () => {
     expect(guest.ui.getByText(/waiting for the host to start another round/i)).toBeInTheDocument()
 
     await user.click(host.ui.getByRole('button', { name: 'Play again' }))
-    await confirmSentences(host, guest, user)
+    await startRound(host, guest)
     await host.ui.findByText('Turn 1 of 4')
     await guest.ui.findByText('Turn 1 of 4')
   })
@@ -157,7 +154,7 @@ describe('playing a whole round on two devices', () => {
     const network = createMemoryNetwork()
     const host = await createGame(network, user)
     const guest = await joinGame(network, user, host.code)
-    await startRound(host, guest, user)
+    await startRound(host, guest)
     await host.ui.findByText('Turn 1 of 4')
     const first = sentenceOn(host)
     const previous = { name: 'Previous sentence' }
@@ -191,7 +188,7 @@ describe('playing a whole round on two devices', () => {
     const network = createMemoryNetwork()
     const host = await createGame(network, user, undefined, { topic: 'Weather' })
     const guest = await joinGame(network, user, host.code)
-    await startRound(host, guest, user)
+    await startRound(host, guest)
     await guest.ui.findByText('Turn 1 of 4')
 
     await user.click(host.ui.getByRole('button', { name: 'Change topic' }))
@@ -210,7 +207,6 @@ describe('playing a whole round on two devices', () => {
     // The host did choose a topic, so the guest is told the sentences could not be written, not that the host has to choose.
     expect(await guest.ui.findByRole('alert')).toHaveTextContent(/can't be reached/i)
     expect(guest.ui.queryByText(/waiting for the host to choose a topic/i)).not.toBeInTheDocument()
-    expect(guest.ui.queryByRole('button', { name: 'Looks good' })).not.toBeInTheDocument()
   })
 })
 
@@ -229,8 +225,7 @@ describe('invite links', () => {
 
     const view = render(<OnlineGame network={network} languages={languages} initialCode={host.code} />)
     const guest = within(view.container)
-    await reviewing(host)
-    expect(await guest.findByRole('heading', { name: 'Review your sentences' })).toBeInTheDocument()
+    await guest.findByText(/^Turn 1 of/)
     expect(guest.queryByLabelText('I speak')).not.toBeInTheDocument()
   })
 
@@ -242,16 +237,15 @@ describe('invite links', () => {
 })
 
 describe('joining', () => {
-  it('takes both devices to the review as soon as the guest joins, with no language to choose', async () => {
+  it('starts the round on both devices as soon as the guest joins, with no language to choose', async () => {
     const user = userEvent.setup()
     const network = createMemoryNetwork()
     const host = await createGame(network, user)
     expect(host.ui.getByLabelText('Invite link')).toBeInTheDocument()
 
     const guest = await startJoining(network, user, host.code)
-    await reviewing(host)
+    await startRound(host, guest)
     expect(host.ui.queryByLabelText('Invite link')).not.toBeInTheDocument()
-    expect(await guest.ui.findByRole('heading', { name: 'Review your sentences' })).toBeInTheDocument()
     expect(guest.ui.queryByLabelText('I speak')).not.toBeInTheDocument()
   })
 
@@ -260,7 +254,6 @@ describe('joining', () => {
     const network = createMemoryNetwork()
     const host = await createGame(network, user)
     const guest = await joinGame(network, user, host.code)
-    await reviewing(host)
 
     await guest.ui.findByText('You are learning German')
     expect(guest.ui.getByText('Your partner is learning English')).toBeInTheDocument()
@@ -268,19 +261,24 @@ describe('joining', () => {
 })
 
 describe('progress steps', () => {
-  it('move from Connect to Review to Play on both devices', async () => {
+  it('move from Connect to Sentences to Play on both devices', async () => {
     const user = userEvent.setup()
     const network = createMemoryNetwork()
-    const host = await createGame(network, user)
+    // The sentences are held back until the test lets them through, so the middle step can be looked at.
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const { generator: instant } = instantGenerator()
+    const host = await createGame(network, user, { generate: async (request, signal) => (await gate, instant.generate(request, signal)) })
     expect(currentStep(host)).toBe('Connect')
 
     const guest = await startJoining(network, user, host.code)
-    await reviewing(host)
-    await guest.ui.findByRole('heading', { name: 'Review your sentences' })
+    await host.ui.findByRole('heading', { name: 'Getting your sentences ready' })
+    await guest.ui.findByRole('heading', { name: 'Getting your sentences ready' })
     expect(currentStep(host)).toBe('Sentences')
     expect(currentStep(guest)).toBe('Sentences')
+    release()
 
-    await startRound(host, guest, user)
+    await startRound(host, guest)
     await guest.ui.findByText('Turn 1 of 4')
     expect(currentStep(host)).toBe('Play')
     expect(currentStep(guest)).toBe('Play')
@@ -302,12 +300,12 @@ describe('joining a game that is not there, or is full', () => {
     const network = createMemoryNetwork()
     const host = await createGame(network, user)
     const guest = await joinGame(network, user, host.code)
-    await reviewing(host)
+    await startRound(host, guest)
 
     const returning = await startJoining(network, user, host.code)
-    expect(await returning.ui.findByRole('heading', { name: 'Review your sentences' })).toBeInTheDocument()
+    await returning.ui.findByText('Turn 1 of 4')
     expect(await guest.ui.findByRole('alert')).toHaveTextContent(/connection .* lost/i)
-    expect(host.ui.getByRole('heading', { name: 'Review your sentences' })).toBeInTheDocument()
+    expect(host.ui.getByText('Turn 1 of 4')).toBeInTheDocument()
     expect(host.ui.queryByText(/partner is disconnected/i)).not.toBeInTheDocument()
   })
 })
@@ -331,7 +329,7 @@ describe('connection problems', () => {
     const network = createMemoryNetwork()
     const host = await createGame(network, user)
     const guest = await joinGame(network, user, host.code)
-    await startRound(host, guest, user)
+    await startRound(host, guest)
     await user.click(await host.ui.findByRole('button', { name: 'Next turn' }))
     await guest.ui.findByText('Turn 2 of 4')
 
@@ -349,7 +347,7 @@ describe('connection problems', () => {
     const network = createMemoryNetwork()
     const host = await createGame(network, user)
     const guest = await joinGame(network, user, host.code)
-    await startRound(host, guest, user)
+    await startRound(host, guest)
     await user.click(await host.ui.findByRole('button', { name: 'Next turn' }))
     await guest.ui.findByText('Turn 2 of 4')
 
@@ -365,7 +363,7 @@ describe('connection problems', () => {
     const network = createMemoryNetwork()
     const host = await createGame(network, user)
     const guest = await joinGame(network, user, host.code)
-    await reviewing(host)
+    await startRound(host, guest)
 
     await user.click(host.ui.getByRole('button', { name: 'Leave game' }))
     expect(host.ui.getByRole('button', { name: 'Create a game' })).toBeInTheDocument()

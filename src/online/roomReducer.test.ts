@@ -16,30 +16,24 @@ const playing = roomReducer(joined, { type: 'START_ROUND', topic: 'modal-verbs',
 
 describe('createRoom', () => {
   it('starts with only the host in it', () => {
-    expect(createRoom(host)).toEqual({ host, guest: null, round: null, review: null })
+    expect(createRoom(host)).toEqual({ host, guest: null, round: null, writing: null })
   })
 })
 
 describe('a room that already knows its first topic', () => {
-  it('starts with that topic\'s sentences on the way, so the joining guest never sees an empty room', () => {
+  it("starts with that topic's sentences on the way, so the joining guest never sees an empty room", () => {
     const room = createRoom(host, 'weather')
-    expect(room.review).toEqual({ topic: 'weather', turns: [], busy: true, error: null, confirmed: [false, false] })
-    expect(roomReducer(room, hello).review).toEqual(room.review)
+    expect(room.writing).toEqual({ topic: 'weather', busy: true, error: null })
+    expect(roomReducer(room, hello).writing).toEqual(room.writing)
   })
 
-  it('starts out as a failed review when the host cannot generate sentences at all', () => {
-    expect(createRoom(host, 'weather', false).review).toEqual({
-      topic: 'weather',
-      turns: [],
-      busy: false,
-      error: 'unavailable',
-      confirmed: [false, false],
-    })
+  it('starts out as a failed request when the host cannot generate sentences at all', () => {
+    expect(createRoom(host, 'weather', false).writing).toEqual({ topic: 'weather', busy: false, error: 'unavailable' })
   })
 
-  it('lets the real review replace it, and clears it like any other', () => {
+  it('lets the real state replace it, and clears it like any other', () => {
     const joinedRoom = roomReducer(createRoom(host, 'weather'), hello)
-    expect(roomReducer(joinedRoom, { type: 'REVIEW_CLOSED' }).review).toBeNull()
+    expect(roomReducer(joinedRoom, { type: 'WRITING_CLOSED' }).writing).toBeNull()
   })
 })
 
@@ -135,7 +129,7 @@ describe('PREVIOUS_TURN', () => {
 describe('CHANGE_TOPIC', () => {
   it('goes back to topic choice and keeps both languages', () => {
     const room = roomReducer(playing, { type: 'CHANGE_TOPIC' })
-    expect(room).toEqual({ host, guest, round: null, review: null })
+    expect(room).toEqual({ host, guest, round: null, writing: null })
   })
 })
 
@@ -160,13 +154,22 @@ describe('REVEAL', () => {
   })
 })
 
-describe('reviewing the sentences', () => {
-  const update = { type: 'REVIEW_UPDATED', topic: 'greetings', turns, busy: false, error: null } as const
-  const reviewing = roomReducer(joined, update)
+describe('writing the sentences', () => {
+  const update = { type: 'WRITING_UPDATED', topic: 'greetings', busy: true, error: null } as const
+  const writing = roomReducer(joined, update)
 
-  describe('REVIEW_UPDATED', () => {
-    it('opens a review where nobody has confirmed yet', () => {
-      expect(reviewing.review).toEqual({ topic: 'greetings', turns, busy: false, error: null, confirmed: [false, false] })
+  describe('WRITING_UPDATED', () => {
+    it('shows what is happening to the sentences', () => {
+      expect(writing.writing).toEqual({ topic: 'greetings', busy: true, error: null })
+    })
+
+    it('says what went wrong when writing failed', () => {
+      const failed = roomReducer(writing, { ...update, busy: false, error: 'limit-reached' })
+      expect(failed.writing).toEqual({ topic: 'greetings', busy: false, error: 'limit-reached' })
+    })
+
+    it('follows a new topic', () => {
+      expect(roomReducer(writing, { ...update, topic: 'weather' }).writing?.topic).toBe('weather')
     })
 
     it('needs a guest first, and does nothing once a round is running', () => {
@@ -175,86 +178,33 @@ describe('reviewing the sentences', () => {
       expect(roomReducer(playing, update)).toBe(playing)
     })
 
-    it('keeps the state as it is when nothing changed, so confirmations stay', () => {
-      const confirmed = roomReducer(reviewing, { type: 'CONFIRM', from: 1 })
-      expect(roomReducer(confirmed, update)).toBe(confirmed)
-    })
-
-    it('clears both confirmations when the sentences are replaced', () => {
-      const confirmed = roomReducer(reviewing, { type: 'CONFIRM', from: 1 })
-      const replaced = roomReducer(confirmed, { ...update, turns: [...turns] })
-      expect(replaced.review?.confirmed).toEqual([false, false])
-    })
-
-    it('clears both confirmations as soon as new sentences are being generated', () => {
-      const confirmed = roomReducer(reviewing, { type: 'CONFIRM', from: 2 })
-      const busy = roomReducer(confirmed, { ...update, busy: true })
-      expect(busy.review).toMatchObject({ busy: true, turns, confirmed: [false, false] })
-    })
-
-    it('keeps the old sentences and says what went wrong when generating failed', () => {
-      const failed = roomReducer(reviewing, { ...update, error: 'unavailable' })
-      expect(failed.review).toMatchObject({ turns, error: 'unavailable', busy: false })
+    it('keeps the state as it is when nothing changed', () => {
+      expect(roomReducer(writing, update)).toBe(writing)
     })
   })
 
-  describe('CONFIRM', () => {
-    it('records who confirmed without starting the round', () => {
-      const one = roomReducer(reviewing, { type: 'CONFIRM', from: 1 })
-      expect(one.review?.confirmed).toEqual([true, false])
-      expect(one.round).toBeNull()
-      expect(roomReducer(reviewing, { type: 'CONFIRM', from: 2 }).review?.confirmed).toEqual([false, true])
+  describe('WRITING_CLOSED and CHANGE_TOPIC', () => {
+    it('both leave the writing screen for everyone', () => {
+      expect(roomReducer(writing, { type: 'WRITING_CLOSED' }).writing).toBeNull()
+      expect(roomReducer(writing, { type: 'CHANGE_TOPIC' }).writing).toBeNull()
     })
 
-    it('starts the round on the reviewed sentences once both have confirmed, whoever is last', () => {
-      for (const order of [[1, 2], [2, 1]] as const) {
-        const first = roomReducer(reviewing, { type: 'CONFIRM', from: order[0] })
-        const started = roomReducer(first, { type: 'CONFIRM', from: order[1] })
-        expect(started.round).toEqual({ topic: 'greetings', game: { turns, index: 0, status: 'playing', revealed: false } })
-        expect(started.review).toBeNull()
-      }
-    })
-
-    it('ignores a second confirmation from the same player', () => {
-      const one = roomReducer(reviewing, { type: 'CONFIRM', from: 1 })
-      expect(roomReducer(one, { type: 'CONFIRM', from: 1 })).toBe(one)
-    })
-
-    it('ignores confirmations while sentences are being generated, when there are none, or when there is no review', () => {
-      const busy = roomReducer(reviewing, { ...update, busy: true })
-      expect(roomReducer(busy, { type: 'CONFIRM', from: 1 })).toBe(busy)
-      const empty = roomReducer(joined, { ...update, turns: [], busy: true })
-      expect(roomReducer(empty, { type: 'CONFIRM', from: 1 })).toBe(empty)
-      expect(roomReducer(joined, { type: 'CONFIRM', from: 1 })).toBe(joined)
-    })
-
-    it('can still be confirmed after a failed regeneration, using the sentences they already had', () => {
-      const failed = roomReducer(reviewing, { ...update, error: 'unavailable' })
-      expect(roomReducer(failed, { type: 'CONFIRM', from: 1 }).review?.confirmed).toEqual([true, false])
+    it('closing when nothing is being written changes nothing', () => {
+      expect(roomReducer(joined, { type: 'WRITING_CLOSED' })).toBe(joined)
     })
   })
 
-  describe('REVIEW_CLOSED and CHANGE_TOPIC', () => {
-    it('both leave the review for everyone', () => {
-      expect(roomReducer(reviewing, { type: 'REVIEW_CLOSED' }).review).toBeNull()
-      expect(roomReducer(reviewing, { type: 'CHANGE_TOPIC' }).review).toBeNull()
+  describe('START_ROUND', () => {
+    it('ends the writing screen as the round starts', () => {
+      const started = roomReducer(writing, { type: 'START_ROUND', topic: 'greetings', turns })
+      expect(started.writing).toBeNull()
+      expect(started.round?.topic).toBe('greetings')
     })
 
-    it('closing when there is no review changes nothing', () => {
-      expect(roomReducer(joined, { type: 'REVIEW_CLOSED' })).toBe(joined)
-    })
-  })
-
-  describe('GUEST_LEFT', () => {
-    it("takes back the guest's confirmation but not the host's", () => {
-      const guestOnly = roomReducer(reviewing, { type: 'CONFIRM', from: 2 })
-      expect(roomReducer(guestOnly, { type: 'GUEST_LEFT' }).review?.confirmed).toEqual([false, false])
-      const hostOnly = roomReducer(reviewing, { type: 'CONFIRM', from: 1 })
-      expect(roomReducer(hostOnly, { type: 'GUEST_LEFT' })).toBe(hostOnly)
-    })
-
-    it('changes nothing when there is no review', () => {
-      expect(roomReducer(joined, { type: 'GUEST_LEFT' })).toBe(joined)
+    it('does not start the round for a room with no guest or no turns, and keeps the writing state', () => {
+      expect(roomReducer(writing, { type: 'START_ROUND', topic: 'greetings', turns: [] })).toBe(writing)
+      const alone = createRoom(host, 'weather')
+      expect(roomReducer(alone, { type: 'START_ROUND', topic: 'weather', turns })).toBe(alone)
     })
   })
 })

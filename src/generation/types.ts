@@ -22,12 +22,9 @@ export interface GenerationOptions {
 }
 
 /** What the host chooses for a round. */
-export interface RoundOptions extends GenerationOptions {
-  /** Check the sentences before the round starts. Off (the default), the round starts as soon as they are written. */
-  review: boolean
-}
+export type RoundOptions = GenerationOptions
 
-export const DEFAULT_ROUND_OPTIONS: RoundOptions = { count: DEFAULT_COUNT, difficulty: DEFAULT_DIFFICULTY, review: false }
+export const DEFAULT_ROUND_OPTIONS: RoundOptions = { count: DEFAULT_COUNT, difficulty: DEFAULT_DIFFICULTY }
 
 export interface GenerateRequest extends GenerationOptions {
   /** The language the sentences are written in. */

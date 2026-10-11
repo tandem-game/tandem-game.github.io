@@ -39,12 +39,12 @@ export function SettingsForm({ languages, defaults, missing = [], fresh = [], on
   }
   const knowsFlag = flagOf('knows', knows)
   const learnsFlag = flagOf('learns', learns)
-  const optionFlags: Flags = { count: flagOf('count'), difficulty: flagOf('difficulty'), review: flagOf('review') }
+  const optionFlags: Flags = { count: flagOf('count'), difficulty: flagOf('difficulty') }
   const unset = [knows === '' && 'the language you speak', learns === '' && "the language you're learning"].filter(Boolean)
   const flagged = knowsFlag || learnsFlag || Object.values(optionFlags).some(Boolean)
 
   function changeOptions(next: RoundOptions) {
-    touch(...(['count', 'difficulty', 'review'] as const).filter((key) => next[key] !== options[key]))
+    touch(...(['count', 'difficulty'] as const).filter((key) => next[key] !== options[key]))
     setOptions(next)
   }
 

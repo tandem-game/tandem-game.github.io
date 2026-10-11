@@ -42,7 +42,7 @@ describe('SettingsForm', () => {
   })
 
   it('starts from what is saved and saves the changes', async () => {
-    const { user, onSave } = setup({ knows: 'de', learns: 'en', options: { count: 3, difficulty: 'easy', review: true } })
+    const { user, onSave } = setup({ knows: 'de', learns: 'en', options: { count: 3, difficulty: 'easy' } })
     expect(screen.getByLabelText('I speak')).toHaveValue('de')
     expect(screen.getByLabelText("I'm learning")).toHaveValue('en')
     expect(screen.getByLabelText('Sentences per player')).toHaveValue('3')
@@ -51,7 +51,7 @@ describe('SettingsForm', () => {
     expect(onSave).toHaveBeenCalledExactlyOnceWith({
       knows: 'de',
       learns: 'en',
-      options: { count: 3, difficulty: 'hard', review: true },
+      options: { count: 3, difficulty: 'hard' },
     })
   })
 
@@ -85,7 +85,7 @@ describe('SettingsForm', () => {
 })
 
 describe('SettingsForm highlights', () => {
-  const saved = { knows: 'de', learns: 'en', options: { count: 3, difficulty: 'easy', review: true } } as const
+  const saved = { knows: 'de', learns: 'en', options: { count: 3, difficulty: 'easy' } } as const
   const field = (label: string) => screen.getByLabelText(label).closest('.field')
 
   it('points out both languages when neither is set, and says why Save is off', () => {
@@ -132,15 +132,15 @@ describe('SettingsForm highlights', () => {
   })
 
   it('marks a new setting, keeps its value, and stops marking it once the player changes it', async () => {
-    const { user, onSave } = setup(saved, false, { fresh: ['review'] })
-    expect(field('Review sentences before the round')).toHaveAttribute('data-flag', 'new')
-    expect(screen.getByLabelText('Review sentences before the round')).toHaveAccessibleDescription(/New setting\. Check it, then save\./)
+    const { user, onSave } = setup(saved, false, { fresh: ['count'] })
+    expect(field('Sentences per player')).toHaveAttribute('data-flag', 'new')
+    expect(screen.getByLabelText('Sentences per player')).toHaveAccessibleDescription(/New setting\. Check it, then save\./)
     expect(screen.getByText(/Some settings need your attention/)).toBeInTheDocument()
 
-    await user.click(screen.getByLabelText('Review sentences before the round'))
-    expect(field('Review sentences before the round')).not.toHaveAttribute('data-flag')
+    await user.selectOptions(screen.getByLabelText('Sentences per player'), '4')
+    expect(field('Sentences per player')).not.toHaveAttribute('data-flag')
     await user.click(screen.getByRole('button', { name: 'Save settings' }))
-    expect(onSave).toHaveBeenCalledExactlyOnceWith({ ...saved, options: { ...saved.options, review: false } })
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ ...saved, options: { ...saved.options, count: 4 } })
   })
 
   it('lets a new setting be saved as it is, without touching it', async () => {

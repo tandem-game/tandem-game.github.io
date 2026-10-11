@@ -14,7 +14,7 @@ export const languages: Language[] = staticSource.getLanguages()
 export type User = ReturnType<typeof userEvent.setup>
 
 /** What the host has saved on a device unless a test says otherwise: speaking German, learning English. */
-export const SAVED_DEFAULTS: HostDefaults = { knows: 'de', learns: 'en', options: { ...DEFAULT_ROUND_OPTIONS, review: true } }
+export const SAVED_DEFAULTS: HostDefaults = { knows: 'de', learns: 'en', options: DEFAULT_ROUND_OPTIONS }
 
 /** Shows a device. It starts with `saved` settings in the browser, so the settings are not asked first; `null` is a first visit. */
 export function open(network: MemoryNetwork, generator?: SentenceGenerator, saved: HostDefaults | null = SAVED_DEFAULTS) {
@@ -35,7 +35,6 @@ export interface HostChoices {
   /** These two are the host's saved settings. */
   count?: number
   difficulty?: Difficulty
-  review?: boolean
 }
 
 /** Picks the topic on the "Create a game" screen, which shows the saved settings. */
@@ -59,11 +58,10 @@ export async function createGame(
   choices: HostChoices = {},
   languages: Pick<HostDefaults, 'knows' | 'learns'> = SAVED_DEFAULTS,
 ) {
-  const { count, difficulty, review } = choices
+  const { count, difficulty } = choices
   const options = {
     count: count ?? DEFAULT_ROUND_OPTIONS.count,
     difficulty: difficulty ?? DEFAULT_ROUND_OPTIONS.difficulty,
-    review: review ?? true,
   }
   const device = open(network, generator ?? undefined, { ...languages, options })
   await user.click(device.ui.getByRole('button', { name: '2 players' }))
@@ -92,16 +90,8 @@ export const joinGame = startJoining
 export const sentenceOn = (device: { container: HTMLElement }) =>
   device.container.querySelector('.sentence')?.textContent
 
-
-/** Both players tell the game that their own sentences are fine, which starts the round. */
-export async function confirmSentences(host: ReturnType<typeof open>, guest: ReturnType<typeof open>, user: User) {
-  await user.click(await host.ui.findByRole('button', { name: 'Looks good' }))
-  await user.click(await guest.ui.findByRole('button', { name: 'Looks good' }))
+/** Both devices are on the first turn: the sentences were written and the round started by itself. */
+export async function startRound(host: ReturnType<typeof open>, guest: ReturnType<typeof open>) {
+  await host.ui.findByText(/^Turn 1 of/)
+  await guest.ui.findByText(/^Turn 1 of/)
 }
-
-/** Both players review the sentences, which the host's topic already asked for, and confirm them. */
-export const startRound = confirmSentences
-
-/** The host's screen once the partner has joined and the sentences have been asked for: loading, failed or ready to review. */
-export const reviewing = (host: ReturnType<typeof open>) =>
-  host.ui.findByRole('heading', { name: /^(Getting your sentences ready|Review your sentences)$/ })

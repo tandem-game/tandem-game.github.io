@@ -7,12 +7,10 @@ import { useRoundSetup } from '../game/useRoundSetup'
 import type { SentenceGenerator } from '../generation/generator'
 import type { GenerateTopic } from '../generation/types'
 import type { HostSettings } from './HostSetup'
-import { RoundPreview } from './RoundPreview'
 import { StepIndicator } from './StepIndicator'
 import { TopicPicker } from './TopicPicker'
 import { TurnView } from './TurnView'
-
-const NOBODY_CONFIRMED = [false, false] as const
+import { WritingSentences } from './WritingSentences'
 
 const topicText = (topic: GenerateTopic) => (topic.kind === 'preset' ? topic.id : topic.text)
 
@@ -30,19 +28,19 @@ interface Round {
   game: GameState
 }
 
-/** One player practising alone: the same review and turns as the two-player game, without a partner or a network. */
+/** One player practising alone: the same turns as the two-player game, without a partner or a network. */
 export function SoloGame({ languages, settings, generator, onLeave }: SoloGameProps) {
   const { topic: firstTopic, options: firstOptions } = settings
   // The player can swap the two languages between rounds without going back to Settings.
   const [{ knows, learns }, setLanguages] = useState({ knows: settings.knows, learns: settings.learns })
   const setup = useRoundSetup([{ knows, learns }, { knows, learns }], generator, {
     solo: true,
-    onSkipReview: (topic, turns) => setRound({ topic: topicText(topic), game: createGame(turns) }),
+    onReady: (topic, turns) => setRound({ topic: topicText(topic), game: createGame(turns) }),
   })
   const { state: setupState, choose, back } = setup
   const [options, setOptions] = useState(firstOptions)
   const [round, setRound] = useState<Round | null>(null)
-  // The topics are only shown once the player has left the review (or the round); the first request is made on arrival.
+  // The topics are only shown once the player has left the writing screen (or the round); the first request is made on arrival.
   const [picking, setPicking] = useState(false)
   const toTopics = () => {
     back()
@@ -78,7 +76,7 @@ export function SoloGame({ languages, settings, generator, onLeave }: SoloGamePr
             onReveal={() => setRound({ ...round, game: gameReducer(round.game, { type: 'REVEAL' }) })}
             onPrevious={() => setRound({ ...round, game: gameReducer(round.game, { type: 'PREVIOUS_TURN' }) })}
             onPlayAgain={() => {
-              // Review again, so the topic gets new sentences rather than the same ones.
+              // New sentences for the same topic, rather than the same ones.
               setRound(null)
               choose(round.topic, options, true)
             }}
@@ -87,23 +85,13 @@ export function SoloGame({ languages, settings, generator, onLeave }: SoloGamePr
       )
     }
 
-    if (setupState.phase === 'preview') {
-      const { topic, turns, busy, error } = setupState
+    if (setupState.phase === 'writing') {
+      const { topic, busy, error } = setupState
       return (
-        <RoundPreview
-          me={1}
-          review={{ turns, busy, error, confirmed: NOBODY_CONFIRMED }}
+        <WritingSentences
+          writing={{ busy, error }}
           topicLabel={topicName(staticSource, topicText(topic))}
-          languages={languages}
-          onConfirm={() => {
-            setRound({ topic: topicText(topic), game: createGame(turns) })
-            back()
-          }}
-          onRegenerate={setup.regenerate}
-          onCancel={() => {
-            setup.cancel()
-            setPicking(true)
-          }}
+          onRetry={setup.retry}
           onBack={toTopics}
         />
       )

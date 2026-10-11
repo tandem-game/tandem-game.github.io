@@ -10,7 +10,7 @@ host's browser ──▶ Cloudflare Worker ──▶ stored sentences? ──▶
 ## Who calls what
 
 - Only the **host's** device calls the Worker. The sentences reach the partner over the existing peer-to-peer connection, so the guest needs nothing.
-- `src/game/useRoundSetup.ts` is the host's side of the review step. It generates the sentences of the chosen topic (one request per language, in parallel, see `generateForPair` in `src/generation/generator.ts`) and regenerates on request. The result is copied into the shared room state (`review` in `src/online/protocol.ts`) so the guest can review their own sentences too. The room reducer starts the round once both players have confirmed.
+- `src/game/useRoundSetup.ts` is the host's side of starting a round. It generates the sentences of the chosen topic (one request per language, in parallel, see `generateForPair` in `src/generation/generator.ts`) and hands them to `onReady`, which starts the round at once. While it runs, or after it failed, its state is copied into the shared room state (`writing` in `src/online/protocol.ts`) so the guest sees "Getting your sentences ready" or the error; only the host can try again.
 - The page reads the Worker's address from `VITE_GENERATE_URL` (`src/generation/config.ts`). It is only accepted if it is `https` (or `http` on localhost) and has no embedded credentials.
 
 ## The Worker (`worker/`)
@@ -40,7 +40,7 @@ Configured in `worker/wrangler.toml`:
 
 ## Safeguards and limits
 
-- **Review before play.** A small model can write odd sentences, and a topic can try to steer it (prompt injection; the spike showed it can follow an instruction hidden in a topic). Each player reviews the sentences they will read, so the review is the real safeguard. Translations are written by the same model and are not reviewed beforehand; they only appear during play.
+- **No review before play.** A small model can write odd sentences, and a topic can try to steer it (prompt injection; the spike showed it can follow an instruction hidden in a topic). Players no longer check the sentences before the round, so the safeguards are the server-side validation (length, language, no markup) and that custom topics are never stored or shared with other users. Translations are written by the same model and only appear during play.
 - **Free plan, no billing.** The Worker runs on Cloudflare's free plan with no card. When a daily limit is reached, calls fail and the game says "the free AI allowance is used up"; stored batches for preset topics are served first if there are any.
 - **Daily cap.** The Worker counts its AI calls in KV (`cap:<date>`) and stops at 400 a day. That keeps it inside KV's 1,000 writes a day and the 10,000 free neurons a day (a call costs about 5).
 - **CORS.** Only `https://tandem-game.github.io` and local development may call the Worker from a browser, but anyone can still call it with `curl`. The daily cap is the real limit.

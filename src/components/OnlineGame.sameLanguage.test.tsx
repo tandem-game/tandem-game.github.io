@@ -2,7 +2,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { SentenceGenerator } from '../generation/generator'
 import type { GenerateRequest } from '../generation/types'
-import { GUEST_DEFAULTS, SAVED_DEFAULTS, confirmSentences, createGame, joinGame, sentenceOn } from '../test/devices'
+import { GUEST_DEFAULTS, SAVED_DEFAULTS, createGame, joinGame, sentenceOn, startRound } from '../test/devices'
 import { createMemoryNetwork } from '../test/memoryNetwork'
 
 const german = [
@@ -35,17 +35,14 @@ function generatorWithNewSentencesEachTime() {
 
 type Languages = { knows: 'de' | 'en'; learns: 'de' | 'en' }
 
-/** A host and a guest in a round that has been confirmed and has started, having saved the given languages. */
+/** A host and a guest in a round that has started, having saved the given languages. */
 async function startGame(hostLanguages: Languages, guestLanguages: Languages) {
   const { generator, asked } = generatorWithNewSentencesEachTime()
   const user = userEvent.setup()
   const network = createMemoryNetwork()
-  const host = await createGame(network, user, generator, { review: true }, hostLanguages)
+  const host = await createGame(network, user, generator, {}, hostLanguages)
   const guest = await joinGame(network, user, host.code, { ...SAVED_DEFAULTS, ...guestLanguages })
-  await host.ui.findByRole('heading', { name: 'Review your sentences' })
-  await confirmSentences(host, guest, user)
-  await host.ui.findByText('Turn 1 of 4')
-  await guest.ui.findByText('Turn 1 of 4')
+  await startRound(host, guest)
   return { user, host, guest, asked }
 }
 

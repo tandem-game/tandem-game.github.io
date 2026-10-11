@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { parseModelOutput } from '../src/generation/validate'
-import { confirmSentences, playRound, reviewedTurns, saveSettings, startGame, TOPIC, type Turn } from './game'
+import { playRound, saveSettings, startGame, TOPIC, type Turn } from './game'
 import { SITE_URL } from '../playwright.config'
 
 // Which requests go to the Worker; E2E_WORKER_PATTERN aims this at a local Worker.
@@ -18,29 +18,15 @@ function expectUsableSentences(turns: Turn[]) {
 const workerAnswered = (page: Page) =>
   page.waitForResponse((response) => WORKER.test(response.url()) && response.request().method() === 'POST' && response.ok())
 
-test('a preset topic is written by the AI, can be regenerated, and is played on both devices', async ({ browser }) => {
+test('a preset topic is written by the AI and played on both devices', async ({ browser }) => {
   let answered: Promise<unknown> = Promise.resolve()
   const game = await startGame(browser, {}, (host) => {
     answered = workerAnswered(host)
   })
-  const { host } = game
 
   await answered
-  await expect(host.getByText(/Written by AI/)).toBeVisible({ timeout: 30_000 })
-  const first = await reviewedTurns(game)
-  expectUsableSentences(first)
-
-  const again = workerAnswered(host)
-  await host.getByRole('button', { name: 'Regenerate with AI' }).click()
-  await again
-  await expect(host.getByRole('button', { name: 'Regenerate with AI' })).toBeEnabled({ timeout: 30_000 })
-  // The guest's screen follows the host's: its button is back once the new sentences have arrived.
-  await expect(game.guest.getByRole('button', { name: 'Looks good' })).toBeEnabled({ timeout: 30_000 })
-  const second = await reviewedTurns(game)
-  expectUsableSentences(second)
-
-  await confirmSentences(game)
-  await playRound(game, second)
+  const { turns } = await playRound(game)
+  expectUsableSentences(turns)
 })
 
 test('both players see each translation after the speaker shows it, or the speaker skips it', async ({ browser }) => {
@@ -48,17 +34,11 @@ test('both players see each translation after the speaker shows it, or the speak
   const game = await startGame(browser, {}, (host) => {
     answered = workerAnswered(host)
   })
-  const { host } = game
 
   await answered
-  await expect(host.getByText(/Written by AI/)).toBeVisible({ timeout: 30_000 })
-
-  const turns = await reviewedTurns(game)
-  expectUsableSentences(turns)
-
-  await confirmSentences(game)
   // Skip the third turn (Player 1's second); the other three show their translation first.
-  const translations = await playRound(game, turns, { translated: true, skip: [2] })
+  const { turns, translations } = await playRound(game, { translated: true, skip: [2] })
+  expectUsableSentences(turns)
   expect(translations).toHaveLength(3)
   // Player 1 reads German and translates into English; Player 2 the other way round.
   for (const { player, text } of translations) {
@@ -72,16 +52,10 @@ test('a custom topic is written by the AI and played on both devices', async ({ 
   const game = await startGame(browser, { customTopic: 'A day at the beach' }, (host) => {
     answered = workerAnswered(host)
   })
-  const { host } = game
 
   await answered
-  await expect(host.getByText(/Written by AI/)).toBeVisible({ timeout: 30_000 })
-
-  const generated = await reviewedTurns(game)
-  expectUsableSentences(generated)
-
-  await confirmSentences(game)
-  await playRound(game, generated)
+  const { turns } = await playRound(game)
+  expectUsableSentences(turns)
 })
 
 test('when the AI service cannot be reached, the host is told and nothing starts', async ({ browser }) => {
@@ -102,7 +76,7 @@ test('when the AI service cannot be reached, the host is told and nothing starts
     await pick()
     await expect(host.getByRole('alert')).toContainText("can't be reached")
     await expect(host.getByRole('button', { name: 'Try again' })).toBeVisible()
-    await expect(host.getByRole('button', { name: 'Looks good' })).toHaveCount(0)
+    await expect(host.getByText(/^Turn 1 of /)).toHaveCount(0)
     // The guest is told too, and can wait for the host to choose again.
     await expect(guest.getByRole('alert')).toContainText("can't be reached", { timeout: 30_000 })
     await host.getByRole('button', { name: 'Choose another topic' }).click()
@@ -120,13 +94,9 @@ test('a hard round with more sentences is asked for with the host\'s settings an
   })
   await expect.poll(() => asked).toMatchObject({ count: 3, difficulty: 'hard' })
 
-  await expect(game.host.getByText(/Written by AI/)).toBeVisible({ timeout: 30_000 })
-  const turns = await reviewedTurns(game, 3)
+  const { turns } = await playRound(game, { perPlayer: 3 })
   expect(turns).toHaveLength(6)
   expectUsableSentences(turns)
-
-  await confirmSentences(game)
-  await playRound(game, turns)
 })
 
 test('playing alone: the AI writes German sentences, each shows its English translation, and the round can be played again', async ({ page }) => {
@@ -138,11 +108,9 @@ test('playing alone: the AI writes German sentences, each shows its English tran
   await page.getByRole('button', { name: 'Start' }).click()
 
   await answered
-  await expect(page.getByText(/Written by AI/)).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('button', { name: 'Looks good' }).click()
 
   for (const turn of [1, 2]) {
-    await expect(page.getByText(`Turn ${turn} of 2`)).toBeVisible()
+    await expect(page.getByText(`Turn ${turn} of 2`)).toBeVisible({ timeout: 30_000 })
     const sentence = (await page.locator('.sentence').textContent()) ?? ''
     expect(parseModelOutput({ sentences: [sentence] }, 'de', 1), `sentence: ${sentence}`).toMatchObject({ ok: true })
 
@@ -155,6 +123,6 @@ test('playing alone: the AI writes German sentences, each shows its English tran
 
   await expect(page.getByRole('heading', { name: 'Round complete' })).toBeVisible()
   await page.getByRole('button', { name: 'Play again' }).click()
-  // The heading only reads "Review" once the AI has written the new sentences.
-  await expect(page.getByRole('heading', { name: 'Review your sentences' })).toBeVisible({ timeout: 30_000 })
+  // The round starts again by itself once the AI has written the new sentences.
+  await expect(page.getByText('Turn 1 of 2')).toBeVisible({ timeout: 30_000 })
 })

@@ -1,4 +1,4 @@
-import { render, waitFor, within } from '@testing-library/react'
+import { render, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { GenerationError, type SentenceGenerator } from '../generation/generator'
@@ -7,7 +7,7 @@ import { languages } from '../test/devices'
 import { english, german, instantGenerator } from '../test/generators'
 import { SoloGame } from './SoloGame'
 
-const options: RoundOptions = { count: 2, difficulty: 'hard', review: true }
+const options: RoundOptions = { count: 2, difficulty: 'hard' }
 // A German speaker who is learning English.
 const settings = { knows: 'de', learns: 'en', topic: 'greetings', options } as const
 
@@ -23,19 +23,15 @@ describe('SoloGame', () => {
   it('asks for one set of sentences, in the language the player speaks, with translations', async () => {
     const { generator, asked } = instantGenerator()
     const { ui } = play(generator)
-    await ui.findByRole('heading', { name: 'Review your sentences' })
+    await ui.findByText('Turn 1 of 2')
 
     expect(asked).toEqual([{ language: 'de', topic: { kind: 'preset', id: 'greetings' }, fresh: false, count: 2, difficulty: 'hard' }])
   })
 
-  it('goes straight to the first turn when the review is off', async () => {
-    const { generator } = instantGenerator()
-    const view = render(
-      <SoloGame languages={languages} settings={{ ...settings, options: { ...options, review: false } }} generator={generator} onLeave={vi.fn()} />,
-    )
-    const ui = within(view.container)
+  it('goes straight to the first turn once the sentences are written, with nothing to confirm', async () => {
+    const { ui } = play()
     expect(await ui.findByText('Turn 1 of 2')).toBeInTheDocument()
-    expect(ui.queryByRole('heading', { name: 'Review your sentences' })).not.toBeInTheDocument()
+    expect(ui.queryByRole('button', { name: 'Looks good' })).not.toBeInTheDocument()
   })
 
   it('says it is writing sentences before they arrive, never offering the topics first', async () => {
@@ -44,14 +40,10 @@ describe('SoloGame', () => {
     expect(ui.getByRole('status')).toHaveTextContent('Generating sentences…')
   })
 
-  it('lets the player review their sentences, then plays them through with the translation on request', async () => {
+  it('plays the sentences through with the translation on request', async () => {
     const { ui, user, container } = play()
-    await ui.findByRole('heading', { name: 'Review your sentences' })
-    expect(ui.getAllByText(/You translate into English/)).toHaveLength(2)
+    await ui.findByText('Turn 1 of 2')
     expect(ui.queryByText(/partner/i)).not.toBeInTheDocument()
-
-    await user.click(ui.getByRole('button', { name: 'Looks good' }))
-    expect(ui.getByText('Turn 1 of 2')).toBeInTheDocument()
     expect(german).toContain(sentenceOn(container))
     expect(ui.getByRole('heading', { name: /Your turn: translate into English/ })).toBeInTheDocument()
 
@@ -67,7 +59,7 @@ describe('SoloGame', () => {
 
   it('lets the player go back to earlier sentences, during the round and after it', async () => {
     const { ui, user, container } = play()
-    await user.click(await ui.findByRole('button', { name: 'Looks good' }))
+    await ui.findByText('Turn 1 of 2')
     const first = sentenceOn(container)
     expect(ui.queryByRole('button', { name: 'Previous sentence' })).not.toBeInTheDocument()
 
@@ -82,15 +74,15 @@ describe('SoloGame', () => {
     expect(ui.getByText('Turn 2 of 2')).toBeInTheDocument()
   })
 
-  it('offers new sentences for the same topic after a round, and reviews them again', async () => {
+  it('offers new sentences for the same topic after a round, and writes them again', async () => {
     const { generator, asked } = instantGenerator()
     const { ui, user } = play(generator)
-    await user.click(await ui.findByRole('button', { name: 'Looks good' }))
+    await ui.findByText('Turn 1 of 2')
     await user.click(ui.getByRole('button', { name: 'Next turn' }))
     await user.click(ui.getByRole('button', { name: 'Finish round' }))
 
     await user.click(ui.getByRole('button', { name: 'Play again' }))
-    await ui.findByRole('heading', { name: 'Review your sentences' })
+    await ui.findByText('Turn 1 of 2')
     expect(asked).toHaveLength(2)
     expect(asked[1]).toMatchObject({ language: 'de', topic: { kind: 'preset', id: 'greetings' }, fresh: true })
   })
@@ -98,7 +90,7 @@ describe('SoloGame', () => {
   it('goes back to the topics with Change topic, keeping the options, and plays the new topic', async () => {
     const { generator, asked } = instantGenerator()
     const { ui, user } = play(generator)
-    await user.click(await ui.findByRole('button', { name: 'Looks good' }))
+    await ui.findByText('Turn 1 of 2')
     await user.click(ui.getByRole('button', { name: 'Change topic' }))
 
     expect(ui.getByLabelText('Sentences')).toHaveValue('2')
@@ -106,40 +98,32 @@ describe('SoloGame', () => {
     expect(ui.queryByLabelText('Show the translation after each turn')).not.toBeInTheDocument()
     await user.type(ui.getByLabelText('Or enter your own topic'), 'my pet dragon')
     await user.click(ui.getByRole('button', { name: 'Use this topic' }))
-    await ui.findByRole('heading', { name: 'Review your sentences' })
+    await ui.findByText('Turn 1 of 2')
     expect(asked[1]).toMatchObject({ topic: { kind: 'custom', text: 'my pet dragon' }, })
   })
 
   it('swaps the two languages between rounds, so the next sentences are written in the other one', async () => {
     const { generator, asked } = instantGenerator()
     const { ui, user } = play(generator)
-    await user.click(await ui.findByRole('button', { name: 'Looks good' }))
+    await ui.findByText('Turn 1 of 2')
     await user.click(ui.getByRole('button', { name: 'Change topic' }))
     expect(ui.getByText('You are learning English')).toBeInTheDocument()
 
     await user.click(ui.getByRole('button', { name: 'Swap languages' }))
     expect(ui.getByText('You are learning German')).toBeInTheDocument()
     await user.click(ui.getByRole('button', { name: 'Weather' }))
-    await ui.findByRole('heading', { name: 'Review your sentences' })
+    await ui.findByText('Turn 1 of 2')
     expect(asked[1]).toMatchObject({ language: 'en', topic: { kind: 'preset', id: 'weather' } })
-    expect(ui.getAllByText(/You translate into German/)).toHaveLength(2)
+    expect(ui.getByRole('heading', { name: /Your turn: translate into German/ })).toBeInTheDocument()
   })
 
   it('shows two steps, with no Connect step because there is nobody to connect to', async () => {
-    const { ui, user } = play()
+    const { ui } = play()
     expect(ui.getAllByRole('listitem').map((item) => item.textContent)).toContain('Sentences')
     expect(ui.queryByText('Connect')).not.toBeInTheDocument()
     expect(ui.getByText('Sentences', { selector: 'li.step' })).toHaveAttribute('aria-current', 'step')
-    await user.click(await ui.findByRole('button', { name: 'Looks good' }))
+    await ui.findByText('Turn 1 of 2')
     expect(ui.getByText('Play', { selector: 'li.step' })).toHaveAttribute('aria-current', 'step')
-  })
-
-  it('can ask for different sentences while reviewing', async () => {
-    const { generator, asked } = instantGenerator()
-    const { ui, user } = play(generator)
-    await user.click(await ui.findByRole('button', { name: 'Regenerate with AI' }))
-    await waitFor(() => expect(asked).toHaveLength(2))
-    expect(asked[1].fresh).toBe(true)
   })
 
   it('shows what went wrong and lets the player try again or pick another topic', async () => {
@@ -152,11 +136,11 @@ describe('SoloGame', () => {
     }
     const { ui, user } = play(generator)
     expect(await ui.findByRole('alert')).toHaveTextContent(/allowance is used up/i)
-    expect(ui.queryByRole('button', { name: 'Looks good' })).not.toBeInTheDocument()
+    expect(ui.queryByText(/Turn 1 of/)).not.toBeInTheDocument()
 
     fail = false
     await user.click(ui.getByRole('button', { name: 'Try again' }))
-    expect(await ui.findByRole('button', { name: 'Looks good' })).toBeInTheDocument()
+    expect(await ui.findByText('Turn 1 of 2')).toBeInTheDocument()
   })
 
   it('goes to the topics when the first request fails and the player chooses another topic', async () => {

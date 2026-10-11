@@ -33,7 +33,7 @@ function write(key: string, value: string) {
 }
 
 /** The settings a player keeps, by name. */
-export type SettingKey = 'knows' | 'learns' | 'count' | 'difficulty' | 'review'
+export type SettingKey = 'knows' | 'learns' | 'count' | 'difficulty'
 
 /**
  * The version of the settings this app has. Raise it whenever a setting is added, and add that setting to
@@ -94,28 +94,24 @@ export function loadSettingsStatus(addedIn = SETTING_ADDED_IN): SettingsStatus {
   const learns = isLanguageCode(raw.learns) && raw.learns !== knows ? raw.learns : ''
   const count = isCount(options.count) ? options.count : undefined
   const difficulty = isDifficulty(options.difficulty) ? options.difficulty : undefined
-  // The review was added before versions, and a save without it has always meant off.
-  const review = typeof options.review === 'boolean' ? options.review : DEFAULT_ROUND_OPTIONS.review
-  const reviewUsable = options.review === undefined || typeof options.review === 'boolean'
 
   const missing: SettingKey[] = []
   if (knows === '') missing.push('knows')
   if (learns === '') missing.push('learns')
   if (count === undefined) missing.push('count')
   if (difficulty === undefined) missing.push('difficulty')
-  if (!reviewUsable) missing.push('review')
   const saved = savedVersion(raw.version)
   const fresh = (Object.keys(addedIn) as SettingKey[]).filter((key) => (addedIn[key] ?? 0) > saved)
 
   if (missing.length === 0 && fresh.length === 0 && knows !== '' && learns !== '' && count !== undefined && difficulty !== undefined) {
-    return { kind: 'complete', defaults: { knows, learns, options: { count, difficulty, review } } }
+    return { kind: 'complete', defaults: { knows, learns, options: { count, difficulty } } }
   }
   return {
     kind: 'incomplete',
     draft: {
       knows,
       learns,
-      options: { count: count ?? DEFAULT_ROUND_OPTIONS.count, difficulty: difficulty ?? DEFAULT_ROUND_OPTIONS.difficulty, review },
+      options: { count: count ?? DEFAULT_ROUND_OPTIONS.count, difficulty: difficulty ?? DEFAULT_ROUND_OPTIONS.difficulty },
     },
     missing,
     fresh: fresh.filter((key) => !missing.includes(key)),

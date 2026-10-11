@@ -11,14 +11,12 @@ import { useHostSession } from '../online/useHostSession'
 import { buildInviteUrl } from '../online/inviteLink'
 import { InviteLink } from './InviteLink'
 import { PlayerChips } from './PlayerChips'
-import { RoundPreview } from './RoundPreview'
 import { Spinner } from './Spinner'
 import { StepIndicator } from './StepIndicator'
 import { TopicPicker } from './TopicPicker'
 import { TurnView } from './TurnView'
 import { Waiting } from './Waiting'
-
-const NOBODY_CONFIRMED = [false, false] as const
+import { WritingSentences } from './WritingSentences'
 
 /** The topic as the rest of the game knows it: a preset's id or the text the host typed. */
 const topicText = (topic: GenerateTopic) => (topic.kind === 'preset' ? topic.id : topic.text)
@@ -37,30 +35,16 @@ interface HostRoomProps {
 
 /** The device that created the game: it is Player 1 and runs the game for both. */
 export function HostRoom({ network, languages, host, firstRound, generator, onLeave }: HostRoomProps) {
-  // The guest can ask for new sentences, but the request is made from here, so the session calls back.
-  const guestRegenerate = useRef(() => {})
-  const { status, code, room, partnerConnected, dispatch } = useHostSession(
-    network,
-    host,
-    () => guestRegenerate.current(),
-    firstRound.topic,
-    generator !== undefined,
-  )
+  const { status, code, room, partnerConnected, dispatch } = useHostSession(network, host, firstRound.topic, generator !== undefined)
   const { round } = room
   const players = useMemo((): Players | null => (room.guest === null ? null : [room.host, room.guest]), [room.host, room.guest])
   const pair = players === null ? null : learningPair(players)
   const setup = useRoundSetup(players, generator, {
-    onSkipReview: (topic, turns) => dispatch({ type: 'START_ROUND', topic: topicText(topic), turns }),
+    onReady: (topic, turns) => dispatch({ type: 'START_ROUND', topic: topicText(topic), turns }),
   })
   const { state: setupState, back: backToTopics } = setup
   const [options, setOptions] = useState(firstRound.options)
   const step = pair === null ? 1 : round === null ? 2 : 3
-  const reviewing = setupState.phase === 'preview'
-  const roundRunning = round !== null
-
-  useEffect(() => {
-    guestRegenerate.current = setup.regenerate
-  })
 
   // Once the partner has joined, the sentences can be written: the host already chose what for.
   const startFirstRound = useRef(() => {})
@@ -72,23 +56,18 @@ export function HostRoom({ network, languages, host, firstRound, generator, onLe
     if (partnerJoined) startFirstRound.current()
   }, [partnerJoined])
 
-  // The guest reviews their sentences too, so the room carries a copy of the host's review.
-  // Until the first review has begun, the room's starting review (see `useHostSession`) stays.
-  const firstReviewPending = useRef(true)
+  // The guest sees what is happening to the sentences, so the room carries a copy of it.
+  // Until the first request has begun, the room's starting state (see `createRoom`) stays.
+  const firstWritingPending = useRef(true)
   useEffect(() => {
-    if (setupState.phase === 'preview') {
-      firstReviewPending.current = false
-      const { topic, turns, busy, error } = setupState
-      dispatch({ type: 'REVIEW_UPDATED', topic: topicText(topic), turns, busy, error })
-    } else if (!firstReviewPending.current) {
-      dispatch({ type: 'REVIEW_CLOSED' })
+    if (setupState.phase === 'writing') {
+      firstWritingPending.current = false
+      const { topic, busy, error } = setupState
+      dispatch({ type: 'WRITING_UPDATED', topic: topicText(topic), busy, error })
+    } else if (!firstWritingPending.current) {
+      dispatch({ type: 'WRITING_CLOSED' })
     }
   }, [setupState, dispatch])
-
-  // Once both players have confirmed, the room starts the round and the review is over.
-  useEffect(() => {
-    if (roundRunning && reviewing) backToTopics()
-  }, [roundRunning, reviewing, backToTopics])
 
   function renderBody() {
     if (status === 'opening') {
@@ -126,19 +105,15 @@ export function HostRoom({ network, languages, host, firstRound, generator, onLe
       )
     }
     if (round === null) {
-      if (setupState.phase === 'preview') {
-        const { topic, turns, busy, error } = setupState
+      if (setupState.phase === 'writing') {
+        const { topic, busy, error } = setupState
         return (
           <>
             <PlayerChips pair={pair} languages={languages} me={1} />
-            <RoundPreview
-              me={1}
-              review={{ turns, busy, error, confirmed: room.review?.confirmed ?? NOBODY_CONFIRMED }}
+            <WritingSentences
+              writing={{ busy, error }}
               topicLabel={topicName(staticSource, topicText(topic))}
-              languages={languages}
-              onConfirm={() => dispatch({ type: 'CONFIRM', from: 1 })}
-              onRegenerate={setup.regenerate}
-              onCancel={setup.cancel}
+              onRetry={setup.retry}
               onBack={backToTopics}
             />
           </>
@@ -177,7 +152,7 @@ export function HostRoom({ network, languages, host, firstRound, generator, onLe
           onReveal={() => dispatch({ type: 'REVEAL', from: 1 })}
           onPrevious={() => dispatch({ type: 'PREVIOUS_TURN' })}
           onPlayAgain={() => {
-            // Review again, so the topic gets new sentences rather than the same ones.
+            // New sentences for the same topic, rather than the same ones.
             dispatch({ type: 'CHANGE_TOPIC' })
             setup.choose(round.topic, options, true)
           }}

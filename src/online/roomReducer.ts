@@ -8,12 +8,9 @@ import type { RoomState } from './protocol'
 export type RoomEvent =
   /** The guest is in, with the languages they saved (null if they sent none); the host decides what each player gets. */
   | { type: 'GUEST_HELLO'; languages: PlayerLanguages | null }
-  /** The host's view of the sentences being generated or reviewed. */
-  | { type: 'REVIEW_UPDATED'; topic: string; turns: Turn[]; busy: boolean; error: GenerationErrorKind | null }
-  | { type: 'REVIEW_CLOSED' }
-  /** A player says the sentences they will read are fine. */
-  | { type: 'CONFIRM'; from: 1 | 2 }
-  | { type: 'GUEST_LEFT' }
+  /** The host's view of the sentences being written. */
+  | { type: 'WRITING_UPDATED'; topic: string; busy: boolean; error: GenerationErrorKind | null }
+  | { type: 'WRITING_CLOSED' }
   | { type: 'START_ROUND'; topic: string; turns: Turn[] }
   | { type: 'CHANGE_TOPIC' }
   | { type: 'NEXT_TURN'; from: 1 | 2 }
@@ -29,16 +26,7 @@ export type RoomEvent =
 export const createRoom = (host: PlayerLanguages, firstTopic?: string, canGenerate = true): RoomState => ({
   host,
   guest: null,
-  review:
-    firstTopic === undefined
-      ? null
-      : {
-          topic: firstTopic,
-          turns: [],
-          busy: canGenerate,
-          error: canGenerate ? null : 'unavailable',
-          confirmed: [false, false],
-        },
+  writing: firstTopic === undefined ? null : { topic: firstTopic, busy: canGenerate, error: canGenerate ? null : 'unavailable' },
   round: null,
 })
 
@@ -51,44 +39,23 @@ export function roomReducer(state: RoomState, event: RoomEvent): RoomState {
       if (state.guest !== null) return state
       return { ...state, guest: resolvePlayers(state.host, event.languages)[1] }
 
-    case 'REVIEW_UPDATED': {
+    case 'WRITING_UPDATED': {
       if (state.guest === null || state.round !== null) return state
-      const { review } = state
-      const { topic, turns, busy, error } = event
-      if (review && review.topic === topic && review.turns === turns && review.busy === busy && review.error === error) {
-        return state
-      }
-      // New sentences, or new ones on the way, have to be checked again by both.
-      const same = review && review.topic === topic && review.turns === turns && !busy
-      return { ...state, review: { topic, turns, busy, error, confirmed: same ? review.confirmed : [false, false] } }
+      const { writing } = state
+      const { topic, busy, error } = event
+      if (writing && writing.topic === topic && writing.busy === busy && writing.error === error) return state
+      return { ...state, writing: { topic, busy, error } }
     }
 
-    case 'REVIEW_CLOSED':
-      return state.review === null ? state : { ...state, review: null }
-
-    case 'CONFIRM': {
-      const { review } = state
-      if (review === null || state.round !== null || review.busy || review.turns.length === 0) return state
-      const index = event.from - 1
-      if (review.confirmed[index]) return state
-      const confirmed: [boolean, boolean] = [review.confirmed[0], review.confirmed[1]]
-      confirmed[index] = true
-      if (confirmed[0] && confirmed[1]) {
-        return roomReducer(state, { type: 'START_ROUND', topic: review.topic, turns: review.turns })
-      }
-      return { ...state, review: { ...review, confirmed } }
-    }
-
-    case 'GUEST_LEFT':
-      if (state.review === null || !state.review.confirmed[1]) return state
-      return { ...state, review: { ...state.review, confirmed: [state.review.confirmed[0], false] } }
+    case 'WRITING_CLOSED':
+      return state.writing === null ? state : { ...state, writing: null }
 
     case 'START_ROUND':
       if (state.guest === null || event.turns.length === 0) return state
-      return { ...state, review: null, round: { topic: event.topic, game: createGame(event.turns) } }
+      return { ...state, writing: null, round: { topic: event.topic, game: createGame(event.turns) } }
 
     case 'CHANGE_TOPIC':
-      return { ...state, review: null, round: null }
+      return { ...state, writing: null, round: null }
 
     case 'PREVIOUS_TURN': {
       const { round } = state

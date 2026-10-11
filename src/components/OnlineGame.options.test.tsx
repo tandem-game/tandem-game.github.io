@@ -1,7 +1,7 @@
 import { waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { confirmSentences, createGame, currentStep, joinGame, reviewing, sentenceOn, type HostChoices } from '../test/devices'
+import { createGame, joinGame, sentenceOn, startRound, type HostChoices } from '../test/devices'
 import { english, german, instantGenerator } from '../test/generators'
 import { createMemoryNetwork } from '../test/memoryNetwork'
 
@@ -12,7 +12,6 @@ async function start(choices: HostChoices = {}) {
   const { generator, asked } = instantGenerator()
   const host = await createGame(network, user, generator, choices)
   const guest = await joinGame(network, user, host.code)
-  await reviewing(host)
   return { user, host, guest, asked }
 }
 
@@ -24,7 +23,7 @@ describe('round options', () => {
 
   it('keeps the difficulty for Play again, and lets the host change it with Change topic', async () => {
     const { user, host, guest, asked } = await start({ difficulty: 'hard' })
-    await confirmSentences(host, guest, user)
+    await startRound(host, guest)
     await host.ui.findByText('Turn 1 of 4')
 
     await user.click(host.ui.getByRole('button', { name: 'Change topic' }))
@@ -33,53 +32,39 @@ describe('round options', () => {
     asked.length = 0
     await user.selectOptions(host.ui.getByLabelText('Difficulty'), 'easy')
     await user.click(host.ui.getByRole('button', { name: 'Weather' }))
-    await reviewing(host)
     await waitFor(() => expect(asked).toHaveLength(2))
     expect(asked.every((request) => request.difficulty === 'easy' && request.topic.kind === 'preset')).toBe(true)
   })
 
   it('plays two sentences each, at medium difficulty, unless the host chooses otherwise', async () => {
-    const { user, host, guest, asked } = await start()
+    const { host, guest, asked } = await start()
     expect(asked.every((request) => request.count === 2 && request.difficulty === 'medium')).toBe(true)
-    await confirmSentences(host, guest, user)
+    await startRound(host, guest)
     await host.ui.findByText('Turn 1 of 4')
-  })
-
-  it('starts the round for both players without a review when the host turned it off', async () => {
-    const user = userEvent.setup()
-    const network = createMemoryNetwork()
-    const host = await createGame(network, user, instantGenerator().generator, { review: false })
-    const guest = await joinGame(network, user, host.code)
-
-    await host.ui.findByText('Turn 1 of 4')
-    await guest.ui.findByText('Turn 1 of 4')
-    expect(host.ui.queryByRole('heading', { name: 'Review your sentences' })).not.toBeInTheDocument()
-    expect(currentStep(host)).toBe('Play')
   })
 
   it('plays as many turns as the host chose', async () => {
-    const { user, host, guest, asked } = await start({ count: 5 })
+    const { host, guest, asked } = await start({ count: 5 })
     expect(asked.every((request) => request.count === 5)).toBe(true)
-    // Each player reviews only their own five.
-    await waitFor(() => expect(host.container.querySelectorAll('.preview-list li')).toHaveLength(5))
-    await waitFor(() => expect(guest.container.querySelectorAll('.preview-list li')).toHaveLength(5))
-    await confirmSentences(host, guest, user)
+    await startRound(host, guest)
     await host.ui.findByText('Turn 1 of 10')
     await guest.ui.findByText('Turn 1 of 10')
   })
 
   describe('translations', () => {
-    it('keep out of the review, which is only about the sentences each player reads', async () => {
+    it('stay hidden when the round starts, which only shows the sentence the speaker reads', async () => {
       const { host, guest } = await start()
-      // The host reads German, so what they review is German; the English translations stay hidden.
-      for (const sentence of english.slice(0, 2)) expect(host.ui.queryByText(sentence)).not.toBeInTheDocument()
-      await waitFor(() => expect(guest.container.querySelectorAll('.preview-list li')).toHaveLength(2))
-      for (const sentence of german.slice(0, 2)) expect(guest.ui.queryByText(sentence)).not.toBeInTheDocument()
+      await startRound(host, guest)
+      // The host reads German first, so the English translations are on neither screen.
+      expect(german).toContain(sentenceOn(host))
+      for (const device of [host, guest]) {
+        for (const sentence of english.slice(0, 2)) expect(device.ui.queryByText(sentence)).not.toBeInTheDocument()
+      }
     })
 
     it('hides it from both players until the speaker shows it, then moves on', async () => {
       const { user, host, guest } = await start()
-      await confirmSentences(host, guest, user)
+      await startRound(host, guest)
       await host.ui.findByText('Turn 1 of 4')
       await guest.ui.findByText('Turn 1 of 4')
 
@@ -107,7 +92,7 @@ describe('round options', () => {
 
     it('lets a speaker skip the translation and go straight to the next turn, on both devices', async () => {
       const { user, host, guest } = await start()
-      await confirmSentences(host, guest, user)
+      await startRound(host, guest)
       await host.ui.findByText('Turn 1 of 4')
 
       await user.click(host.ui.getByRole('button', { name: 'Next turn' }))
@@ -124,7 +109,7 @@ describe('round options', () => {
 
     it('can skip the translation on the last turn to finish the round', async () => {
       const { user, host, guest } = await start()
-      await confirmSentences(host, guest, user)
+      await startRound(host, guest)
       for (const device of [host, guest, host]) {
         await user.click(await device.ui.findByRole('button', { name: 'Next turn' }))
       }
@@ -136,7 +121,7 @@ describe('round options', () => {
 
     it('lets the guest show the translation on their own turn', async () => {
       const { user, host, guest } = await start()
-      await confirmSentences(host, guest, user)
+      await startRound(host, guest)
       await host.ui.findByText('Turn 1 of 4')
       await user.click(host.ui.getByRole('button', { name: 'Show translation' }))
       await host.ui.findByText('Translation')
@@ -150,7 +135,7 @@ describe('round options', () => {
 
     it('plays a whole round, showing each translation first, and keeps the options for Play again', async () => {
       const { user, host, guest, asked } = await start()
-      await confirmSentences(host, guest, user)
+      await startRound(host, guest)
       await host.ui.findByText('Turn 1 of 4')
       for (const device of [host, guest, host, guest]) {
         await user.click(await device.ui.findByRole('button', { name: 'Show translation' }))
@@ -162,7 +147,6 @@ describe('round options', () => {
 
       asked.length = 0
       await user.click(host.ui.getByRole('button', { name: 'Play again' }))
-      await host.ui.findByRole('heading', { name: 'Review your sentences' })
       await waitFor(() => expect(asked).toHaveLength(2))
       expect(asked.every((request) => request.count === 2 && request.fresh === true)).toBe(true)
     })

@@ -4,8 +4,8 @@ import { SITE_URL } from '../playwright.config'
 /** The preset topic the host picks unless a test says otherwise. */
 export const TOPIC = 'Greetings and small talk'
 
-/** The setup screen's heading: it only says "Review" once sentences exist, so a failed or slow request has the other. */
-const SETUP_HEADING = /^(Getting your sentences ready|Review your sentences)$/
+/** What a device shows once the guest has joined: the sentences being written, or the round already started. */
+const writingOrPlaying = (page: Page) => page.getByRole('heading', { name: 'Getting your sentences ready' }).or(page.getByText(/^Turn 1 of /))
 
 export interface Turn {
   player: 1 | 2
@@ -26,8 +26,6 @@ export interface Settings {
   customTopic?: string
   count?: number
   difficulty?: 'easy' | 'medium' | 'hard'
-  /** The sentence review is off in a fresh install; the tests turn it on unless they say otherwise. */
-  review?: boolean
 }
 
 /**
@@ -40,7 +38,6 @@ export async function saveSettings(page: Page, settings: Settings = {}) {
   await page.getByLabel("I'm learning").selectOption(settings.learns ?? 'en')
   if (settings.count !== undefined) await page.getByLabel(/^Sentences/).selectOption(String(settings.count))
   if (settings.difficulty !== undefined) await page.getByLabel('Difficulty').selectOption(settings.difficulty)
-  if (settings.review ?? true) await page.getByLabel('Review sentences before the round').check()
   await page.getByRole('button', { name: 'Save settings' }).click()
 }
 
@@ -67,65 +64,42 @@ export async function startGame(browser: Browser, settings: Settings = {}, ready
   // The guest saves their own settings first (a first visit is asked for them), so each learns what the other speaks.
   const guest = await (await browser.newContext()).newPage()
   await guest.goto(SITE_URL)
-  await saveSettings(guest, { knows: 'en', learns: 'de', review: false })
+  await saveSettings(guest, { knows: 'en', learns: 'de' })
   await guest.goto(`${SITE_URL}?join=${code}`)
   // Connecting goes through the public PeerJS broker, so allow it some time; on failure, show what the guest saw.
-  // Once connected, the guest's languages go to the host and the review begins.
+  // Once connected, the guest's languages go to the host and the sentences are written.
   await expect(
-    guest.getByRole('heading', { name: SETUP_HEADING }),
+    writingOrPlaying(guest),
     `the guest's screen: ${await guest.locator('main').innerText()}`,
   ).toBeVisible({ timeout: 30_000 })
-  await expect(host.getByRole('heading', { name: SETUP_HEADING })).toBeVisible({ timeout: 30_000 })
+  await expect(writingOrPlaying(host)).toBeVisible({ timeout: 30_000 })
   return { host, guest }
 }
 
-/** The sentences one player is shown on their review screen, in the order they will be played. */
-async function ownSentences(page: Page, expected: number): Promise<string[]> {
-  const items = page.locator('.preview-list li')
-  await expect(items).toHaveCount(expected)
-  return items.evaluateAll((elements) =>
-    elements.map((element) =>
-      // The sentence is the text node after the "You translate into …" label.
-      [...element.childNodes]
-        .filter((node) => node.nodeType === Node.TEXT_NODE)
-        .map((node) => node.textContent)
-        .join(''),
-    ),
-  )
-}
-
-/** What the two review screens show together: each player only sees the sentences they read themselves. */
-export async function reviewedTurns({ host, guest }: Game, perPlayer = 2): Promise<Turn[]> {
-  const [first, second] = await Promise.all([ownSentences(host, perPlayer), ownSentences(guest, perPlayer)])
-  return first.flatMap((text, i): Turn[] => [
-    { player: 1, text },
-    { player: 2, text: second[i] },
-  ])
-}
-
-/** Both players say their own sentences are fine, which starts the round. */
-export async function confirmSentences({ host, guest }: Game) {
-  await host.getByRole('button', { name: 'Looks good' }).click()
-  // The guest's screen follows the host's, so give the connection time.
-  await guest.getByRole('button', { name: 'Looks good' }).click({ timeout: 30_000 })
-}
-
 /**
- * Plays a round to its end, checking that both devices show the same sentence on every turn.
+ * Plays a round to its end, from the moment the AI's sentences arrive, checking that both devices show the same
+ * sentence on every turn. Returns the sentences in the order they were played.
  * With `translated`, each speaker shows the translation first, which is returned per player,
  * except on the turns (by index) listed in `skip`, where they go on without showing it.
  */
-export async function playRound({ host, guest }: Game, turns: Turn[], { translated = false, skip = [] as number[] } = {}) {
+export async function playRound({ host, guest }: Game, { perPlayer = 2, translated = false, skip = [] as number[] } = {}) {
+  const turns: Turn[] = []
   const translations: Turn[] = []
-  for (const [index, turn] of turns.entries()) {
-    await expect(host.locator('.sentence')).toHaveText(turn.text)
-    await expect(guest.locator('.sentence')).toHaveText(turn.text)
+  const total = perPlayer * 2
+  for (let index = 0; index < total; index++) {
+    // The players take turns, starting with the host. The first sentence waits for the AI.
+    const player = index % 2 === 0 ? 1 : 2
+    await expect(host.getByText(`Turn ${index + 1} of ${total}`)).toBeVisible({ timeout: 30_000 })
+    const text = (await host.locator('.sentence').textContent()) ?? ''
+    await expect(guest.locator('.sentence')).toHaveText(text, { timeout: 30_000 })
+    const turn: Turn = { player, text }
+    turns.push(turn)
     const mover = turn.player === 1 ? host : guest
     if (translated && skip.includes(index)) {
       await expect(host.locator('.translation')).toHaveCount(0)
       await expect(guest.locator('.translation')).toHaveCount(0)
       // Without showing the translation, the speaker goes straight on.
-      await mover.getByRole('button', { name: index === turns.length - 1 ? 'Finish round' : 'Next turn' }).click()
+      await mover.getByRole('button', { name: index === total - 1 ? 'Finish round' : 'Next turn' }).click()
       continue
     }
     if (translated) {
@@ -139,9 +113,9 @@ export async function playRound({ host, guest }: Game, turns: Turn[], { translat
       await expect(guest.locator('.translation')).toContainText(shown)
       translations.push({ player: turn.player, text: shown })
     }
-    await mover.getByRole('button', { name: index === turns.length - 1 ? 'Finish round' : 'Next turn' }).click()
+    await mover.getByRole('button', { name: index === total - 1 ? 'Finish round' : 'Next turn' }).click()
   }
   await expect(host.getByRole('heading', { name: 'Round complete' })).toBeVisible()
   await expect(guest.getByRole('heading', { name: 'Round complete' })).toBeVisible()
-  return translations
+  return { turns, translations }
 }
