@@ -36,7 +36,7 @@ function manualGenerator() {
 }
 
 const preset = 'greetings'
-const options = { count: 2, difficulty: 'medium' } as const
+const options = { count: 2, difficulty: 'B1' } as const
 
 /** A hook with nothing chosen yet, and a spy for the sentences it hands over once they are written. */
 function start(who: Parameters<typeof useRoundSetup>[0] = players, solo = false) {
@@ -111,11 +111,11 @@ describe('useRoundSetup', () => {
   describe('round options', () => {
     it('asks for the chosen number of sentences and builds that many turns', async () => {
       const { result, pending, onReady } = start()
-      act(() => result.current.choose(preset, { count: 1, difficulty: 'medium' }))
+      act(() => result.current.choose(preset, { count: 1, difficulty: 'B1' }))
       expect(pending.map((p) => p.request)).toEqual(
-        expect.arrayContaining([expect.objectContaining({ count: 1, difficulty: 'medium' })]),
+        expect.arrayContaining([expect.objectContaining({ count: 1, difficulty: 'B1' })]),
       )
-      expect(result.current.state).toMatchObject({ options: { count: 1, difficulty: 'medium' } })
+      expect(result.current.state).toMatchObject({ options: { count: 1, difficulty: 'B1' } })
       await act(async () => {
         for (const p of pending.splice(0)) {
           p.resolve({
@@ -129,12 +129,12 @@ describe('useRoundSetup', () => {
 
     it('keeps the options, difficulty included, when it tries again', async () => {
       const { result, pending, failAll } = start()
-      act(() => result.current.choose(preset, { count: 3, difficulty: 'hard' }))
+      act(() => result.current.choose(preset, { count: 3, difficulty: 'B2' }))
       await act(async () => failAll('unavailable'))
       expect(result.current.state).toMatchObject({ busy: false, error: 'unavailable' })
       act(() => result.current.retry())
       expect(pending.map((p) => p.request)).toEqual(
-        expect.arrayContaining([expect.objectContaining({ count: 3, difficulty: 'hard', fresh: true })]),
+        expect.arrayContaining([expect.objectContaining({ count: 3, difficulty: 'B2', fresh: true })]),
       )
     })
   })

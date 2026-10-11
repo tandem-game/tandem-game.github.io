@@ -10,7 +10,7 @@ const topics = [
   { id: 'greetings', name: 'Greetings and small talk' },
   { id: 'weather', name: 'Weather' },
 ]
-const defaults: HostDefaults = { knows: 'de', learns: 'en', options: { count: 4, difficulty: 'hard' } }
+const defaults: HostDefaults = { knows: 'de', learns: 'en', options: { count: 4, difficulty: 'B2' } }
 
 function setup(props: { lastTopic?: string | null; solo?: boolean; defaults?: HostDefaults } = {}) {
   const onCreate = vi.fn()
@@ -39,7 +39,7 @@ describe('HostSetup', () => {
     expect(summary).toHaveTextContent(/I speakGerman/)
     expect(summary).toHaveTextContent(/I'm learningEnglish/)
     expect(summary).toHaveTextContent(/Sentences per player4/)
-    expect(summary).toHaveTextContent(/DifficultyHard/)
+    expect(summary).toHaveTextContent(/DifficultyB2 – Hard/)
     expect(summary).not.toHaveTextContent(/Translations/)
   })
 

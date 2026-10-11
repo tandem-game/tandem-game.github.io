@@ -181,11 +181,11 @@ describe('generating sentences', () => {
     afterEach(() => warn.mockRestore())
 
     it('says why each attempt was rejected, with the request settings and the start of the answer', async () => {
-      const tooLong = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'
+      const tooLong = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twentyone twentytwo twentythree'
       ai.replies = [modelReply({ sentences: [tooLong, good.sentences[1]], translations: good.translations }), 'nope']
-      await ask(preset({ difficulty: 'hard', count: 2 }))
+      await ask(preset({ difficulty: 'B2', count: 2 }))
       expect(warnings()).toEqual([
-        expect.objectContaining({ event: 'rejected-answer', attempt: 1, reason: 'bad-length', language: 'de', difficulty: 'hard', count: 2, answer: expect.stringContaining('fourteen') }),
+        expect.objectContaining({ event: 'rejected-answer', attempt: 1, reason: 'bad-length', language: 'de', difficulty: 'B2', count: 2, answer: expect.stringContaining('fourteen') }),
         expect.objectContaining({ event: 'rejected-answer', attempt: 2, reason: 'not-json', answer: 'nope' }),
       ])
     })
@@ -260,25 +260,47 @@ describe('generating sentences', () => {
         return ai.calls.at(-1)?.input.messages[0].content ?? ''
       }
 
-      it('asks for short present-tense sentences when easy', async () => {
-        const prompt = await promptFor('easy')
-        expect(prompt).toMatch(/present tense/i)
-        expect(prompt).toMatch(/4 to 7 words/)
+      it('asks for short present-tense sentences at A1', async () => {
+        const prompt = await promptFor('A1')
+        expect(prompt).toMatch(/CEFR level A1/)
+        expect(prompt).toMatch(/present tense only/i)
+        expect(prompt).toMatch(/3 to 6 words/)
+        // Asking to vary the tense would contradict "present tense only".
+        expect(prompt).not.toMatch(/same tense/)
       })
 
-      it('asks for the usual simple sentences when medium, and when no level is given', async () => {
-        const medium = await promptFor('medium')
-        expect(medium).toMatch(/4 to 12 words/)
-        expect(medium).not.toMatch(/subordinate/i)
-        expect(await promptFor()).toBe(medium)
+      it('asks for B1 when no level is given', async () => {
+        const b1 = await promptFor('B1')
+        expect(b1).toMatch(/CEFR level B1/)
+        expect(b1).toMatch(/7 to 10 words/)
+        expect(await promptFor()).toBe(b1)
       })
 
-      it('asks for longer sentences with richer grammar when hard, within what the checks allow', async () => {
-        const prompt = await promptFor('hard')
-        expect(prompt).toMatch(/subordinate clause/i)
-        // The model overshoots a stated length by about three words, and the checks stop at 18: aim well below it.
-        expect(prompt).toMatch(/8 to 11 words/)
-        expect(prompt).toMatch(/never more than 11/)
+      it('mixes the grammar of a level: a different point for each sentence, and no tense twice in a row', async () => {
+        const prompt = await promptFor('B2')
+        expect(prompt).toMatch(/different grammar point from this list: .*Passiv.*Konjunktiv II/)
+        expect(prompt).toMatch(/same tense in two sentences in a row/)
+      })
+
+      it('lists the grammar in the language of the sentences', async () => {
+        kv = new FakeKv()
+        ai.replies = [goodReply]
+        await ask({ ...custom('pets'), difficulty: 'A2', language: 'en' })
+        expect(ai.calls.at(-1)?.input.messages[0].content).not.toMatch(/separable verb/)
+        expect(await promptFor('A2')).toMatch(/separable verb/) // the tests' sentences are German
+      })
+
+      it('gives an example of the level, and says not to copy it', async () => {
+        const prompt = await promptFor('C1')
+        expect(prompt).toContain('Hätte ich gewusst, wie voll es wird')
+        expect(prompt).toMatch(/must not copy/)
+      })
+
+      it('keeps every level within what the checks allow, even though the model writes about three words more', async () => {
+        for (const [level, longest] of [['B2', 12], ['C1', 14], ['C2', 16]] as const) {
+          expect(await promptFor(level)).toMatch(new RegExp(`never more than ${longest}`))
+          expect(longest + 3).toBeLessThanOrEqual(22)
+        }
       })
 
       it('refuses an unknown level before spending anything', async () => {
@@ -299,7 +321,7 @@ describe('generating sentences', () => {
 })
 
 describe('stored sentences for preset topics', () => {
-  const key = 'pool:v5:de:weather:2:medium'
+  const key = 'pool:v6:de:weather:2:B1'
 
   it('stores a freshly generated batch for 30 days', async () => {
     ai.replies = [goodReply]
@@ -356,11 +378,11 @@ describe('stored sentences for preset topics', () => {
   it('keeps a separate store for each difficulty, so an easy batch is never served for a hard round', async () => {
     kv.data.set(key, JSON.stringify([good]))
     ai.replies = [otherReply]
-    const { body } = await ask(preset({ difficulty: 'hard' }))
+    const { body } = await ask(preset({ difficulty: 'B2' }))
     expect(body).toEqual(other)
-    expect(kv.keys('pool:')).toEqual([key, 'pool:v5:de:weather:2:hard'])
+    expect(kv.keys('pool:')).toEqual([key, 'pool:v6:de:weather:2:B2'])
     // Each level is then served from its own store.
-    expect((await ask(preset({ difficulty: 'hard' }))).body).toEqual(other)
+    expect((await ask(preset({ difficulty: 'B2' }))).body).toEqual(other)
     expect((await ask(preset())).body).toEqual(good)
     expect(ai.calls).toHaveLength(1)
   })
@@ -375,7 +397,7 @@ describe('stored sentences for preset topics', () => {
     ]
     const { body } = await ask(preset({ language: 'en' }))
     expect((body.sentences as string[])[0]).toMatch(/swim/)
-    expect(kv.keys('pool:')).toEqual([key, 'pool:v5:en:weather:2:medium'])
+    expect(kv.keys('pool:')).toEqual([key, 'pool:v6:en:weather:2:B1'])
   })
 
   it('still answers when storing the batch fails', async () => {
@@ -438,7 +460,7 @@ describe('the daily cap on AI calls', () => {
 
   it('falls back to a stored batch for a preset when the cap is reached', async () => {
     kv.data.set(capKey, '5')
-    kv.data.set('pool:v5:de:weather:2:medium', JSON.stringify([other]))
+    kv.data.set('pool:v6:de:weather:2:B1', JSON.stringify([other]))
     expect((await ask(preset({ fresh: true }))).body).toEqual(other)
     expect((await ask(preset({ language: 'en' }))).status).toBe(429)
   })
@@ -536,13 +558,13 @@ describe('rounds of other lengths', () => {
   })
 
   describe('stored sentences', () => {
-    const key = 'pool:v5:de:weather:2:medium'
+    const key = 'pool:v6:de:weather:2:B1'
 
     it('keeps a separate store for each count', async () => {
       ai.replies = [goodReply, modelReply(five)]
       await ask(preset())
       await ask(preset({ count: 5 }))
-      expect([...kv.keys('pool:')].sort()).toEqual([key, 'pool:v5:de:weather:5:medium'].sort())
+      expect([...kv.keys('pool:')].sort()).toEqual([key, 'pool:v6:de:weather:5:B1'].sort())
     })
 
     it('stores translations with their sentences and serves both from the store', async () => {

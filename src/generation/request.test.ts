@@ -37,7 +37,7 @@ describe('parseGenerateRequest', () => {
       topic: { kind: 'preset', id: 'weather' },
       fresh: false,
       count: 2,
-      difficulty: 'medium',
+      difficulty: 'B1',
     })
   })
 
@@ -49,7 +49,7 @@ describe('parseGenerateRequest', () => {
       topic: { kind: 'custom', text: 'my pet dragon' },
       fresh: true,
       count: 2,
-      difficulty: 'medium',
+      difficulty: 'B1',
     })
   })
 
@@ -82,7 +82,7 @@ describe('parseGenerateRequest', () => {
       topic: { kind: 'preset', id: 'greetings' },
       fresh: false,
       count: 2,
-      difficulty: 'medium',
+      difficulty: 'B1',
     })
   })
 })
@@ -96,7 +96,7 @@ describe('parseGenerateRequest options', () => {
       topic: { kind: 'preset', id: 'weather' },
       fresh: false,
       count: 5,
-      difficulty: 'medium',
+      difficulty: 'B1',
     })
     expect(parseGenerateRequest({ ...base, count: 1 })).toMatchObject({ count: 1 })
   })
@@ -108,10 +108,10 @@ describe('parseGenerateRequest options', () => {
   })
 
   it('reads the difficulty, and plays at medium when none is given', () => {
-    for (const difficulty of ['easy', 'medium', 'hard']) {
+    for (const difficulty of ['A2', 'B1', 'B2']) {
       expect(parseGenerateRequest({ ...base, difficulty })).toMatchObject({ difficulty })
     }
-    expect(parseGenerateRequest(base)).toMatchObject({ difficulty: 'medium' })
+    expect(parseGenerateRequest(base)).toMatchObject({ difficulty: 'B1' })
   })
 
   it('rejects a difficulty that is not one of the three levels', () => {

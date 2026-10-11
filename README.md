@@ -10,7 +10,7 @@ Start by choosing **1 player** or **2 players**.
 
 ### On your own (1 player)
 
-Your saved settings (language you speak, language you are learning, number of sentences from 1 to 5, difficulty) are shown first; pick a topic (one of ten everyday ones, or your own). An AI writes the sentences in your language, with their translations, and the round starts as soon as they are ready. For each sentence, say it aloud in the language you are learning, tap "Show translation" to check yourself, then "Next turn". Nothing is sent to another device, and there is no scoring.
+Your saved settings (language you speak, language you are learning, number of sentences from 1 to 5, difficulty as a CEFR level from A1 to C2) are shown first; pick a topic (one of ten everyday ones, or your own). An AI writes the sentences in your language, with their translations, and the round starts as soon as they are ready. For each sentence, say it aloud in the language you are learning, tap "Show translation" to check yourself, then "Next turn". Nothing is sent to another device, and there is no scoring.
 
 ### Saved settings
 

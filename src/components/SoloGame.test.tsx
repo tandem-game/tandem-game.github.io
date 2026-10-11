@@ -7,7 +7,7 @@ import { languages } from '../test/devices'
 import { english, german, instantGenerator } from '../test/generators'
 import { SoloGame } from './SoloGame'
 
-const options: RoundOptions = { count: 2, difficulty: 'hard' }
+const options: RoundOptions = { count: 2, difficulty: 'B2' }
 // A German speaker who is learning English.
 const settings = { knows: 'de', learns: 'en', topic: 'greetings', options } as const
 
@@ -25,7 +25,7 @@ describe('SoloGame', () => {
     const { ui } = play(generator)
     await ui.findByText('Turn 1 of 2')
 
-    expect(asked).toEqual([{ language: 'de', topic: { kind: 'preset', id: 'greetings' }, fresh: false, count: 2, difficulty: 'hard' }])
+    expect(asked).toEqual([{ language: 'de', topic: { kind: 'preset', id: 'greetings' }, fresh: false, count: 2, difficulty: 'B2' }])
   })
 
   it('goes straight to the first turn once the sentences are written, with nothing to confirm', async () => {
@@ -94,7 +94,7 @@ describe('SoloGame', () => {
     await user.click(ui.getByRole('button', { name: 'Change topic' }))
 
     expect(ui.getByLabelText('Sentences')).toHaveValue('2')
-    expect(ui.getByLabelText('Difficulty')).toHaveValue('hard')
+    expect(ui.getByLabelText('Difficulty')).toHaveValue('B2')
     expect(ui.queryByLabelText('Show the translation after each turn')).not.toBeInTheDocument()
     await user.type(ui.getByLabelText('Or enter your own topic'), 'my pet dragon')
     await user.click(ui.getByRole('button', { name: 'Use this topic' }))

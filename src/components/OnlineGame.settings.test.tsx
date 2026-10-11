@@ -7,7 +7,7 @@ import { SAVED_DEFAULTS, languages, open } from '../test/devices'
 import { instantGenerator } from '../test/generators'
 import { createMemoryNetwork } from '../test/memoryNetwork'
 
-const saved = { knows: 'de', learns: 'en', options: { count: 3, difficulty: 'hard' } } as const
+const saved = { knows: 'de', learns: 'en', options: { count: 3, difficulty: 'B2' } } as const
 
 describe('the first visit', () => {
   it('shows the tutorial, then asks for the settings with nothing to go back to, and saves them', async () => {
@@ -22,7 +22,7 @@ describe('the first visit', () => {
     await user.selectOptions(ui.getByLabelText('I speak'), 'de')
     await user.selectOptions(ui.getByLabelText("I'm learning"), 'en')
     await user.selectOptions(ui.getByLabelText('Sentences per player'), '3')
-    await user.selectOptions(ui.getByLabelText('Difficulty'), 'hard')
+    await user.selectOptions(ui.getByLabelText('Difficulty'), 'B2')
     await user.click(ui.getByRole('button', { name: 'Save settings' }))
 
     expect(loadHostDefaults()).toEqual(saved)
@@ -53,7 +53,7 @@ describe('a returning player whose saved settings need a look', () => {
   }
 
   it('goes straight to the settings, not the tutorial, with what they had kept and the rest highlighted', () => {
-    store({ knows: 'de', options: { count: 4, difficulty: 'hard' } })
+    store({ knows: 'de', options: { count: 4, difficulty: 'B2' } })
     const ui = render_()
     expect(ui.queryByRole('heading', { name: 'Welcome to Tandem Game' })).not.toBeInTheDocument()
     expect(ui.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
@@ -63,13 +63,13 @@ describe('a returning player whose saved settings need a look', () => {
     expect(ui.getByLabelText("I'm learning")).toHaveValue('')
     expect(ui.getByLabelText("I'm learning")).toBeInvalid()
     expect(ui.getByLabelText('Sentences per player')).toHaveValue('4')
-    expect(ui.getByLabelText('Difficulty')).toHaveValue('hard')
+    expect(ui.getByLabelText('Difficulty')).toHaveValue('B2')
     expect(ui.getByText(/need your attention/)).toBeInTheDocument()
   })
 
   it('cannot play until they have saved, and then reaches the start screen with everything kept', async () => {
     const user = userEvent.setup()
-    store({ knows: 'de', options: { count: 4, difficulty: 'hard' } })
+    store({ knows: 'de', options: { count: 4, difficulty: 'B2' } })
     const ui = render_()
     expect(ui.getByRole('button', { name: 'Save settings' })).toBeDisabled()
     expect(ui.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
@@ -77,20 +77,20 @@ describe('a returning player whose saved settings need a look', () => {
     await user.selectOptions(ui.getByLabelText("I'm learning"), 'en')
     await user.click(ui.getByRole('button', { name: 'Save settings' }))
     expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
-    expect(loadHostDefaults()).toEqual({ knows: 'de', learns: 'en', options: { count: 4, difficulty: 'hard' } })
+    expect(loadHostDefaults()).toEqual({ knows: 'de', learns: 'en', options: { count: 4, difficulty: 'B2' } })
   })
 
   it('is asked about an option that has no saved value, with the default shown', () => {
-    store({ knows: 'de', learns: 'en', options: { difficulty: 'easy' } })
+    store({ knows: 'de', learns: 'en', options: { difficulty: 'A2' } })
     const ui = render_()
     expect(ui.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
     expect(ui.getByLabelText('Sentences per player')).toHaveAccessibleDescription(/Not set yet/)
-    expect(ui.getByLabelText('Difficulty')).toHaveValue('easy')
+    expect(ui.getByLabelText('Difficulty')).toHaveValue('A2')
   })
 
   it('sees the same page before joining through an invite link, and joins once it is saved', async () => {
     const user = userEvent.setup()
-    store({ learns: 'de', options: { count: 2, difficulty: 'medium' } })
+    store({ learns: 'de', options: { count: 2, difficulty: 'B1' } })
     const ui = render_('999999')
     expect(ui.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
     expect(ui.getByLabelText("I'm learning")).toHaveValue('de')
@@ -103,7 +103,7 @@ describe('a returning player whose saved settings need a look', () => {
   })
 
   it('does not interrupt a player whose settings are complete', () => {
-    store({ version: 1, knows: 'de', learns: 'en', options: { count: 2, difficulty: 'medium' } })
+    store({ version: 2, knows: 'de', learns: 'en', options: { count: 2, difficulty: 'B1' } })
     const ui = render_()
     expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
     expect(ui.queryByText(/need your attention/)).not.toBeInTheDocument()
@@ -141,9 +141,9 @@ describe('Settings on the start screen', () => {
     expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
 
     await user.click(ui.getByRole('button', { name: 'Settings' }))
-    await user.selectOptions(ui.getByLabelText('Difficulty'), 'easy')
+    await user.selectOptions(ui.getByLabelText('Difficulty'), 'A2')
     await user.click(ui.getByRole('button', { name: 'Save settings' }))
-    expect(loadHostDefaults()).toEqual({ ...SAVED_DEFAULTS, options: { ...SAVED_DEFAULTS.options, difficulty: 'easy' } })
+    expect(loadHostDefaults()).toEqual({ ...SAVED_DEFAULTS, options: { ...SAVED_DEFAULTS.options, difficulty: 'A2' } })
     expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
   })
 })
@@ -163,7 +163,7 @@ describe('creating a game from the saved settings', () => {
     expect(asked[0]).toMatchObject({
       language: 'de',
       count: 3,
-      difficulty: 'hard',
+      difficulty: 'B2',
       topic: { kind: 'preset', id: 'weather' },
     })
   })

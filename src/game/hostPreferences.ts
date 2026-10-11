@@ -1,6 +1,6 @@
 import { isLanguageCode, type LanguageCode } from '../content/types'
 import { MAX_TOPIC_LENGTH } from '../generation/request'
-import { DEFAULT_ROUND_OPTIONS, MAX_COUNT, MIN_COUNT, isDifficulty, type RoundOptions } from '../generation/types'
+import { DEFAULT_ROUND_OPTIONS, MAX_COUNT, MIN_COUNT, isDifficulty, legacyDifficulty, type RoundOptions } from '../generation/types'
 
 /** What the host keeps from game to game: the language they speak, the one they learn, and the round options. */
 export interface HostDefaults {
@@ -39,10 +39,13 @@ export type SettingKey = 'knows' | 'learns' | 'count' | 'difficulty'
  * The version of the settings this app has. Raise it whenever a setting is added, and add that setting to
  * `ADDED_IN` with the new version: everyone who saved before it is shown the settings once, with it highlighted.
  */
-export const SETTINGS_VERSION = 1
+export const SETTINGS_VERSION = 2
 
-/** For each setting added after version 1, the version that added it (never above `SETTINGS_VERSION`). */
-export const SETTING_ADDED_IN: Partial<Record<SettingKey, number>> = {}
+/**
+ * For each setting added after version 1, the version that added it (never above `SETTINGS_VERSION`).
+ * The difficulty counts: from version 2 it is a CEFR level, so players who chose easy, medium or hard are asked once.
+ */
+export const SETTING_ADDED_IN: Partial<Record<SettingKey, number>> = { difficulty: 2 }
 
 /** What a settings page starts from: a language is '' while it is unset. */
 export interface SettingsDraft {
@@ -93,7 +96,7 @@ export function loadSettingsStatus(addedIn = SETTING_ADDED_IN): SettingsStatus {
   // The two languages must differ: of a clashing pair, the first is kept.
   const learns = isLanguageCode(raw.learns) && raw.learns !== knows ? raw.learns : ''
   const count = isCount(options.count) ? options.count : undefined
-  const difficulty = isDifficulty(options.difficulty) ? options.difficulty : undefined
+  const difficulty = isDifficulty(options.difficulty) ? options.difficulty : legacyDifficulty(options.difficulty)
 
   const missing: SettingKey[] = []
   if (knows === '') missing.push('knows')

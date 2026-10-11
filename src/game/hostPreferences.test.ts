@@ -10,7 +10,7 @@ import {
   suggestHostDefaults,
 } from './hostPreferences'
 
-const defaults = { knows: 'de', learns: 'en', options: { count: 4, difficulty: 'hard' } } as const
+const defaults = { knows: 'de', learns: 'en', options: { count: 4, difficulty: 'B2' } } as const
 
 beforeEach(() => localStorage.clear())
 afterEach(() => vi.restoreAllMocks())
@@ -26,19 +26,19 @@ describe('host defaults', () => {
   })
 
   it('saved before translations became automatic still load, without the old flag', () => {
-    localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ ...defaults, options: { ...defaults.options, translate: false } }))
+    localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ version: SETTINGS_VERSION, ...defaults, options: { ...defaults.options, translate: false } }))
     expect(loadHostDefaults()).toEqual(defaults)
   })
 
   it('saved while there was a review setting still load, without it', () => {
-    localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ ...defaults, options: { ...defaults.options, review: true } }))
+    localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ version: SETTINGS_VERSION, ...defaults, options: { ...defaults.options, review: true } }))
     expect(loadHostDefaults()).toEqual(defaults)
     expect(loadSettingsStatus()).toEqual({ kind: 'complete', defaults })
   })
 
   it('ignore a review flag of any kind, since there is no review any more', () => {
     for (const review of ['no', 1, null]) {
-      localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ ...defaults, options: { ...defaults.options, review } }))
+      localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ version: SETTINGS_VERSION, ...defaults, options: { ...defaults.options, review } }))
       expect(loadHostDefaults()).toEqual(defaults)
     }
   })
@@ -67,7 +67,7 @@ describe('host defaults', () => {
   })
 
   it('drop unknown fields', () => {
-    localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ ...defaults, extra: 1 }))
+    localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify({ version: SETTINGS_VERSION, ...defaults, extra: 1 }))
     expect(loadHostDefaults()).toEqual(defaults)
   })
 
@@ -94,18 +94,42 @@ describe('settings status', () => {
     }
   })
 
-  it('is complete for a full save, whether or not it has a version', () => {
+  it('is complete for a full save made by this version of the app', () => {
     saveHostDefaults(defaults)
     expect(loadSettingsStatus()).toEqual({ kind: 'complete', defaults })
-    store(defaults)
-    expect(loadSettingsStatus()).toEqual({ kind: 'complete', defaults })
+  })
+
+  describe('saved before the difficulty became a CEFR level', () => {
+    it.each([
+      ['easy', 'A2'],
+      ['medium', 'B1'],
+      ['hard', 'B2'],
+    ])('reads %s as %s, and asks about it once, with the rest kept', (old, level) => {
+      store({ knows: 'de', learns: 'en', options: { count: 4, difficulty: old } })
+      expect(loadSettingsStatus()).toEqual({
+        kind: 'incomplete',
+        draft: { knows: 'de', learns: 'en', options: { count: 4, difficulty: level } },
+        missing: [],
+        fresh: ['difficulty'],
+      })
+    })
+
+    it('does not play from them until they are saved again', () => {
+      store({ knows: 'de', learns: 'en', options: { count: 4, difficulty: 'medium' } })
+      expect(loadHostDefaults()).toBeNull()
+    })
+
+    it('reads a name that only exists on every object as not set', () => {
+      store({ version: SETTINGS_VERSION, knows: 'de', learns: 'en', options: { count: 4, difficulty: 'constructor' } })
+      expect(loadSettingsStatus()).toMatchObject({ kind: 'incomplete', missing: ['difficulty'] })
+    })
   })
 
   it('keeps what is usable and says what is missing', () => {
     store({ knows: 'de', options: { count: 4 } })
     expect(loadSettingsStatus()).toEqual({
       kind: 'incomplete',
-      draft: { knows: 'de', learns: '', options: { count: 4, difficulty: 'medium' } },
+      draft: { knows: 'de', learns: '', options: { count: 4, difficulty: 'B1' } },
       missing: ['learns', 'difficulty'],
       fresh: [],
     })
@@ -137,7 +161,7 @@ describe('settings status', () => {
     })
 
     it('does not ask about a setting the player has to fill in anyway twice', () => {
-      store({ knows: 'de', learns: 'en', options: { difficulty: 'easy' } })
+      store({ knows: 'de', learns: 'en', options: { difficulty: 'A2' } })
       expect(loadSettingsStatus({ count: 2 })).toMatchObject({ missing: ['count'], fresh: [] })
     })
 

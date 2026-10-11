@@ -14,7 +14,7 @@ describe('RoundOptionsFields', () => {
   it('starts with two sentences and medium difficulty', () => {
     setup()
     expect(screen.getByLabelText('Sentences per player')).toHaveValue('2')
-    expect(screen.getByLabelText('Difficulty')).toHaveValue('medium')
+    expect(screen.getByLabelText('Difficulty')).toHaveValue('B1')
   })
 
   it('offers one to five sentences per player', () => {
@@ -23,32 +23,35 @@ describe('RoundOptionsFields', () => {
     expect(counts.map((option) => option.textContent)).toEqual(['1', '2', '3', '4', '5'])
   })
 
-  it('offers easy, medium and hard', () => {
+  it('offers the six CEFR levels', () => {
     setup()
     const levels = within(screen.getByLabelText('Difficulty')).getAllByRole('option')
     expect(levels.map((option) => [option.textContent, option.getAttribute('value')])).toEqual([
-      ['Easy', 'easy'],
-      ['Medium', 'medium'],
-      ['Hard', 'hard'],
+      ['A1 – Beginner', 'A1'],
+      ['A2 – Easy', 'A2'],
+      ['B1 – Medium', 'B1'],
+      ['B2 – Hard', 'B2'],
+      ['C1 – Advanced', 'C1'],
+      ['C2 – Proficient', 'C2'],
     ])
   })
 
   it('shows the options it is given', () => {
-    setup({ count: 3, difficulty: 'hard' })
+    setup({ count: 3, difficulty: 'B2' })
     expect(screen.getByLabelText('Sentences per player')).toHaveValue('3')
-    expect(screen.getByLabelText('Difficulty')).toHaveValue('hard')
+    expect(screen.getByLabelText('Difficulty')).toHaveValue('B2')
   })
 
   it('reports a new number of sentences, keeping the other choices', async () => {
-    const { user, onChange } = setup({ count: 2, difficulty: 'easy' })
+    const { user, onChange } = setup({ count: 2, difficulty: 'A2' })
     await user.selectOptions(screen.getByLabelText('Sentences per player'), '5')
-    expect(onChange).toHaveBeenCalledExactlyOnceWith({ count: 5, difficulty: 'easy' })
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ count: 5, difficulty: 'A2' })
   })
 
   it('reports a new difficulty, keeping the other choices', async () => {
-    const { user, onChange } = setup({ count: 4, difficulty: 'medium' })
-    await user.selectOptions(screen.getByLabelText('Difficulty'), 'hard')
-    expect(onChange).toHaveBeenCalledExactlyOnceWith({ count: 4, difficulty: 'hard' })
+    const { user, onChange } = setup({ count: 4, difficulty: 'B1' })
+    await user.selectOptions(screen.getByLabelText('Difficulty'), 'B2')
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ count: 4, difficulty: 'B2' })
   })
 
   it('has no translation switch, because translations are always on', () => {

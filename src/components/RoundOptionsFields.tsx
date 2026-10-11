@@ -1,5 +1,6 @@
 import { useId } from 'react'
-import { DIFFICULTIES, MAX_COUNT, MIN_COUNT, isDifficulty, type Difficulty, type RoundOptions } from '../generation/types'
+import { DIFFICULTIES, MAX_COUNT, MIN_COUNT, isDifficulty, type RoundOptions } from '../generation/types'
+import { DIFFICULTY_HELP, DIFFICULTY_NAMES } from './difficultyText'
 import { flagMessage, type Flags } from './settingFlags'
 
 interface RoundOptionsFieldsProps {
@@ -15,15 +16,7 @@ interface RoundOptionsFieldsProps {
 
 const COUNTS = Array.from({ length: MAX_COUNT - MIN_COUNT + 1 }, (_, i) => MIN_COUNT + i)
 
-const DIFFICULTY_NAMES: Record<Difficulty, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }
-
 const COUNT_HELP = 'How many sentences each of you reads aloud in a round, from 1 to 5.'
-
-const DIFFICULTY_HELP: Record<Difficulty, string> = {
-  easy: 'short sentences of 4 to 7 words, in the present tense, with everyday words.',
-  medium: 'everyday sentences of 4 to 12 words.',
-  hard: 'longer sentences of 8 to 11 words, with clauses, different tenses and less common words.',
-}
 
 /** The host's choices for a round: how many sentences, and how hard. */
 export function RoundOptionsFields({ options, onChange, solo = false, withHelp = false, flags = {} }: RoundOptionsFieldsProps) {

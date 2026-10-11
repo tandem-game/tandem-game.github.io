@@ -87,12 +87,12 @@ test('when the AI service cannot be reached, the host is told and nothing starts
 
 test('a hard round with more sentences is asked for with the host\'s settings and played on both devices', async ({ browser }) => {
   let asked: unknown
-  const game = await startGame(browser, { count: 3, difficulty: 'hard' }, (host) => {
+  const game = await startGame(browser, { count: 3, difficulty: 'B2' }, (host) => {
     host.on('request', (request) => {
       if (WORKER.test(request.url()) && request.method() === 'POST') asked = request.postDataJSON()
     })
   })
-  await expect.poll(() => asked).toMatchObject({ count: 3, difficulty: 'hard' })
+  await expect.poll(() => asked).toMatchObject({ count: 3, difficulty: 'B2' })
 
   const { turns } = await playRound(game, { perPlayer: 3 })
   expect(turns).toHaveLength(6)

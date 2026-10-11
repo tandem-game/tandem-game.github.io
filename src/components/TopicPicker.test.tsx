@@ -74,8 +74,8 @@ describe('TopicPicker', () => {
   })
 
   it('shows the round options and reports a change', async () => {
-    const { user, onOptionsChange } = setup({ options: { count: 2, difficulty: 'medium' } })
-    await user.selectOptions(screen.getByLabelText('Difficulty'), 'hard')
-    expect(onOptionsChange).toHaveBeenCalledExactlyOnceWith({ count: 2, difficulty: 'hard' })
+    const { user, onOptionsChange } = setup({ options: { count: 2, difficulty: 'B1' } })
+    await user.selectOptions(screen.getByLabelText('Difficulty'), 'B2')
+    expect(onOptionsChange).toHaveBeenCalledExactlyOnceWith({ count: 2, difficulty: 'B2' })
   })
 })

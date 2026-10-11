@@ -72,9 +72,15 @@ describe('parseModelOutput', () => {
       expect(parseModelOutput(json([long, 'Er muss lernen.']), 'de')).toMatchObject({ ok: true })
     })
 
+    it('accepts a C2 German sentence that runs past what was asked for, which is more than 120 characters', () => {
+      const long = 'Ungeachtet des außergewöhnlichen Andrangs bewahrten die erfahrenen Händler, deren Waren keineswegs alltäglich waren, stets eine gelassene Ruhe'
+      expect(long.length).toBeGreaterThan(120)
+      expect(parseModelOutput(json([long, 'Er muss lernen.']), 'de')).toMatchObject({ ok: true })
+    })
+
     it('sentences that are too short or too long', () => {
       expect(reason(json(['Ich', 'Er muss lernen.']))).toBe('bad-length')
-      expect(reason(json([Array(19).fill('ich').join(' '), 'Er muss lernen.']))).toBe('bad-length')
+      expect(reason(json([Array(23).fill('ich').join(' '), 'Er muss lernen.']))).toBe('bad-length')
       expect(reason(json(['Ich kann ' + 'x'.repeat(200), 'Er muss lernen.']))).toBe('bad-length')
       expect(reason(json(['   ', 'Er muss lernen.']))).toBe('bad-length')
     })

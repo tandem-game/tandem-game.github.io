@@ -25,7 +25,7 @@ describe.skipIf(!url)('the real Worker', () => {
       topic: { kind: 'preset', id: 'weather' },
       fresh: true,
       count: 3,
-      difficulty: 'medium',
+      difficulty: 'B1',
     })
     console.log('preset (de):', answer)
     expect(answer.sentences).toHaveLength(3)
@@ -33,7 +33,7 @@ describe.skipIf(!url)('the real Worker', () => {
   }, 30_000)
 
   it('generates both languages of a round for a custom topic', async () => {
-    const options: GenerationOptions = { count: 2, difficulty: 'medium' }
+    const options: GenerationOptions = { count: 2, difficulty: 'B1' }
     const result = await generateForPair(live(), ['en', 'de'], { kind: 'custom', text: 'a rainy day at the beach' }, false, options)
     console.log('custom round:', result)
     expect(result.de).toHaveLength(2)
@@ -42,7 +42,7 @@ describe.skipIf(!url)('the real Worker', () => {
 
   it('refuses an invalid request without spending the AI', async () => {
     await expect(
-      live().generate({ language: 'de', topic: { kind: 'custom', text: 'x'.repeat(61) }, fresh: false, count: 2, difficulty: 'medium' }),
+      live().generate({ language: 'de', topic: { kind: 'custom', text: 'x'.repeat(61) }, fresh: false, count: 2, difficulty: 'B1' }),
     ).rejects.toMatchObject({ kind: 'invalid' })
   }, 30_000)
 })

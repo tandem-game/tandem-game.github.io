@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Language, LanguageCode, Topic } from '../content/types'
 import type { HostDefaults } from '../game/hostPreferences'
 import type { RoundOptions } from '../generation/types'
+import { DIFFICULTY_NAMES } from './difficultyText'
 import { TopicChoice } from './TopicChoice'
 
 /** What the host decides before the invite link exists. */
@@ -38,7 +39,7 @@ export function HostSetup({ languages, topics, defaults, lastTopic, onCreate, on
     ['I speak', nameOf(knows)],
     ["I'm learning", nameOf(learns)],
     [solo ? 'Sentences' : 'Sentences per player', String(options.count)],
-    ['Difficulty', options.difficulty.charAt(0).toUpperCase() + options.difficulty.slice(1)],
+    ['Difficulty', DIFFICULTY_NAMES[options.difficulty]],
   ]
 
   return (

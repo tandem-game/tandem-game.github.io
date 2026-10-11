@@ -42,16 +42,16 @@ describe('SettingsForm', () => {
   })
 
   it('starts from what is saved and saves the changes', async () => {
-    const { user, onSave } = setup({ knows: 'de', learns: 'en', options: { count: 3, difficulty: 'easy' } })
+    const { user, onSave } = setup({ knows: 'de', learns: 'en', options: { count: 3, difficulty: 'A2' } })
     expect(screen.getByLabelText('I speak')).toHaveValue('de')
     expect(screen.getByLabelText("I'm learning")).toHaveValue('en')
     expect(screen.getByLabelText('Sentences per player')).toHaveValue('3')
-    await user.selectOptions(screen.getByLabelText('Difficulty'), 'hard')
+    await user.selectOptions(screen.getByLabelText('Difficulty'), 'B2')
     await user.click(screen.getByRole('button', { name: 'Save settings' }))
     expect(onSave).toHaveBeenCalledExactlyOnceWith({
       knows: 'de',
       learns: 'en',
-      options: { count: 3, difficulty: 'hard' },
+      options: { count: 3, difficulty: 'B2' },
     })
   })
 
@@ -68,7 +68,7 @@ describe('SettingsForm', () => {
     expect(screen.getByLabelText('I speak')).toHaveAccessibleDescription(/your sentences are written in/i)
     expect(screen.getByLabelText("I'm learning")).toHaveAccessibleDescription(/learn the language your partner speaks/i)
     expect(screen.getByLabelText('Sentences per player')).toHaveAccessibleDescription(/reads aloud in a round/i)
-    expect(screen.getByLabelText('Difficulty')).toHaveAccessibleDescription(/Easy: .*4 to 7 words.*Medium: .*Hard: .*8 to 11 words/)
+    expect(screen.getByLabelText('Difficulty')).toHaveAccessibleDescription(/A1 – Beginner: .*A2 – Easy: .*B1 – Medium: .*B2 – Hard: .*C1 – Advanced: .*C2 – Proficient: /)
   })
 
   it('goes back without saving, when there is somewhere to go back to', async () => {
@@ -85,7 +85,7 @@ describe('SettingsForm', () => {
 })
 
 describe('SettingsForm highlights', () => {
-  const saved = { knows: 'de', learns: 'en', options: { count: 3, difficulty: 'easy' } } as const
+  const saved = { knows: 'de', learns: 'en', options: { count: 3, difficulty: 'A2' } } as const
   const field = (label: string) => screen.getByLabelText(label).closest('.field')
 
   it('points out both languages when neither is set, and says why Save is off', () => {

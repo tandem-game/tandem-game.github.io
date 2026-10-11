@@ -25,7 +25,7 @@ export interface Settings {
   /** Typed instead of picking the preset `TOPIC`. */
   customTopic?: string
   count?: number
-  difficulty?: 'easy' | 'medium' | 'hard'
+  difficulty?: 'A2' | 'B1' | 'B2'
 }
 
 /**

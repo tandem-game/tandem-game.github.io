@@ -9,7 +9,7 @@ const request: GenerateRequest = {
   topic: { kind: 'preset', id: 'weather' },
   fresh: false,
   count: 2,
-  difficulty: 'medium',
+  difficulty: 'B1',
 }
 const sentences = ['Ich kann gut schwimmen.', 'Er muss seine Hausaufgaben machen.']
 const translations = ['I can swim very well.', 'He has to do his homework.']
@@ -177,7 +177,7 @@ describe('translations from the Worker', () => {
   it('sends the options to the Worker', async () => {
     const fetchFn = vi.fn((() => answer({ sentences, translations })) as FetchFn)
     await createHttpGenerator(URL, { fetch: fetchFn }).generate({ ...request, count: 2 })
-    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body))).toMatchObject({ count: 2, difficulty: 'medium' })
+    expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body))).toMatchObject({ count: 2, difficulty: 'B1' })
   })
 })
 
@@ -186,7 +186,7 @@ describe('generateForPair', () => {
   const german = ['Ich kann gut schwimmen.', 'Er muss seine Hausaufgaben machen.']
   const english = ['She can swim very well.', 'They should try harder today.']
   const topic = { kind: 'custom', text: 'my pet dragon' } as const
-  const options: GenerationOptions = { count: 2, difficulty: 'medium' }
+  const options: GenerationOptions = { count: 2, difficulty: 'B1' }
   const answerFor = (language: string): GeneratedSentences => {
     const sentences = language === 'de' ? german : english
     return { sentences, translations: sentences.map((text) => `${text} (translated)`) }
@@ -267,7 +267,7 @@ describe('generateForPair', () => {
 
 describe('generateForPair when both players read the same language', () => {
   const topic = { kind: 'custom', text: 'my pet dragon' } as const
-  const options: GenerationOptions = { count: 2, difficulty: 'medium' }
+  const options: GenerationOptions = { count: 2, difficulty: 'B1' }
   const batch = (...texts: string[]): GeneratedSentences => ({ sentences: texts, translations: texts.map((text) => `${text} (translated)`) })
   const answers = (...batches: GeneratedSentences[]) => {
     const asked: GenerateRequest[] = []
@@ -324,7 +324,7 @@ describe('generateForPair when both players read the same language', () => {
 describe('generateForLanguage', () => {
   const german = ['Ich kann gut schwimmen.', 'Er muss seine Hausaufgaben machen.']
   const topic = { kind: 'custom', text: 'my pet dragon' } as const
-  const options: GenerationOptions = { count: 2, difficulty: 'hard' }
+  const options: GenerationOptions = { count: 2, difficulty: 'B2' }
 
   it('makes exactly one request, for that language, with the options', async () => {
     const generate = vi.fn(async (_req: GenerateRequest) => ({ sentences: german, translations: ['one', 'two'] }))

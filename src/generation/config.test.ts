@@ -49,7 +49,7 @@ describe('generatorFromUrl', () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ sentences: ['Ich kann gut schwimmen.', 'Er muss lernen.'], translations: ['I can swim well.', 'He has to learn.'] })))
     vi.stubGlobal('fetch', fetchFn)
     const generator = generatorFromUrl('https://example.workers.dev')
-    const sentences = await generator?.generate({ language: 'de', topic: { kind: 'preset', id: 'weather' }, fresh: false, count: 2, difficulty: 'medium' })
+    const sentences = await generator?.generate({ language: 'de', topic: { kind: 'preset', id: 'weather' }, fresh: false, count: 2, difficulty: 'B1' })
     expect(sentences?.sentences).toHaveLength(2)
     expect(fetchFn.mock.calls[0]).toEqual(['https://example.workers.dev/', expect.anything()])
   })

@@ -2,8 +2,8 @@ import type { LanguageCode } from '../content/types'
 import { DEFAULT_COUNT } from './types'
 
 const MIN_WORDS = 3
-const MAX_WORDS = 18
-const MAX_CHARACTERS = 120
+const MAX_WORDS = 22
+const MAX_CHARACTERS = 160
 
 export type ParseResult =
   | { ok: true; sentences: string[] }

@@ -16,29 +16,29 @@ async function start(choices: HostChoices = {}) {
 }
 
 describe('round options', () => {
-  it.each(['easy', 'medium', 'hard'] as const)('asks for %s sentences for both players when the host chose that', async (difficulty) => {
+  it.each(['A2', 'B1', 'B2'] as const)('asks for %s sentences for both players when the host chose that', async (difficulty) => {
     const { asked } = await start({ difficulty })
     expect(asked.map((request) => request.difficulty)).toEqual([difficulty, difficulty])
   })
 
   it('keeps the difficulty for Play again, and lets the host change it with Change topic', async () => {
-    const { user, host, guest, asked } = await start({ difficulty: 'hard' })
+    const { user, host, guest, asked } = await start({ difficulty: 'B2' })
     await startRound(host, guest)
     await host.ui.findByText('Turn 1 of 4')
 
     await user.click(host.ui.getByRole('button', { name: 'Change topic' }))
     // The in-room picker still has the host's earlier choices, and they can change them.
-    expect(await host.ui.findByLabelText('Difficulty')).toHaveValue('hard')
+    expect(await host.ui.findByLabelText('Difficulty')).toHaveValue('B2')
     asked.length = 0
-    await user.selectOptions(host.ui.getByLabelText('Difficulty'), 'easy')
+    await user.selectOptions(host.ui.getByLabelText('Difficulty'), 'A2')
     await user.click(host.ui.getByRole('button', { name: 'Weather' }))
     await waitFor(() => expect(asked).toHaveLength(2))
-    expect(asked.every((request) => request.difficulty === 'easy' && request.topic.kind === 'preset')).toBe(true)
+    expect(asked.every((request) => request.difficulty === 'A2' && request.topic.kind === 'preset')).toBe(true)
   })
 
   it('plays two sentences each, at medium difficulty, unless the host chooses otherwise', async () => {
     const { host, guest, asked } = await start()
-    expect(asked.every((request) => request.count === 2 && request.difficulty === 'medium')).toBe(true)
+    expect(asked.every((request) => request.count === 2 && request.difficulty === 'B1')).toBe(true)
     await startRound(host, guest)
     await host.ui.findByText('Turn 1 of 4')
   })

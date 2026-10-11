@@ -7,10 +7,16 @@ export const DEFAULT_COUNT = 2
 
 export type GenerateTopic = { kind: 'preset'; id: string } | { kind: 'custom'; text: string }
 
-/** How demanding the sentences are: short and plain, today's style, or longer with richer grammar. */
-export const DIFFICULTIES = ['easy', 'medium', 'hard'] as const
+/** How demanding the sentences are, as a CEFR level: from A1 (beginner) to C2 (proficient). */
+export const DIFFICULTIES = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const
 export type Difficulty = (typeof DIFFICULTIES)[number]
-export const DEFAULT_DIFFICULTY: Difficulty = 'medium'
+export const DEFAULT_DIFFICULTY: Difficulty = 'B1'
+
+/** What the levels were called before CEFR: settings saved then are read as these levels. */
+const LEGACY_DIFFICULTIES: Record<string, Difficulty> = { easy: 'A2', medium: 'B1', hard: 'B2' }
+
+export const legacyDifficulty = (value: unknown): Difficulty | undefined =>
+  typeof value === 'string' && Object.hasOwn(LEGACY_DIFFICULTIES, value) ? LEGACY_DIFFICULTIES[value] : undefined
 
 export const isDifficulty = (value: unknown): value is Difficulty => DIFFICULTIES.some((level) => level === value)
 
