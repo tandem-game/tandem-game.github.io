@@ -65,7 +65,7 @@ main {
   gap: var(--space-3);
   max-width: 36rem;
   margin: 0 auto;
-  padding: 2.5rem 1.25rem 4rem;
+  padding: 3.5rem 1.25rem 4rem;
 }
 
 h1,
@@ -654,11 +654,13 @@ button:disabled {
   margin: 0;
 }
 
+/* Pinned to the top left corner of the window, not to the centred column. */
 .header-links {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-2);
   display: flex;
-  justify-content: flex-start;
   gap: var(--space-1);
-  margin-bottom: var(--space-1);
 }
 
 button.link {
