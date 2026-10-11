@@ -611,3 +611,81 @@ describe('rounds of other lengths', () => {
     })
   })
 })
+
+describe('limits per client', () => {
+  /** Allows each key `allowed` calls, like Cloudflare's binding within one period. */
+  const fakeLimiter = (allowed: number) => {
+    const used = new Map<string, number>()
+    return {
+      keys: used,
+      async limit({ key }: { key: string }) {
+        used.set(key, (used.get(key) ?? 0) + 1)
+        return { success: (used.get(key) ?? 0) <= allowed }
+      },
+    }
+  }
+  const withLimits = (requests: ReturnType<typeof fakeLimiter>, fresh: ReturnType<typeof fakeLimiter>) =>
+    createHandler({ ai, kv, allowedOrigins: [ORIGIN], limiters: { requests, fresh }, dailyCap: 50, now: () => now, random: () => random })
+  const from = (ip: string, body: unknown = preset()) => post(body, { Origin: ORIGIN, 'CF-Connecting-IP': ip })
+  const status = async (handle: ReturnType<typeof withLimits>, request: Request) => (await handle(request)).status
+
+  beforeEach(() => {
+    ai.replies = Array.from({ length: 20 }, () => goodReply)
+  })
+
+  it('refuses a client that asks too often with 429 and slow-down, which is not the daily allowance', async () => {
+    const handle = withLimits(fakeLimiter(2), fakeLimiter(2))
+    expect([await status(handle, from('1.1.1.1')), await status(handle, from('1.1.1.1'))]).toEqual([200, 200])
+    const response = await handle(from('1.1.1.1'))
+    expect(response.status).toBe(429)
+    expect(await response.json()).toEqual({ error: 'slow-down' })
+    expect(response.headers.get('Retry-After')).toBe('60')
+  })
+
+  it('counts each client on its own', async () => {
+    const handle = withLimits(fakeLimiter(1), fakeLimiter(1))
+    expect(await status(handle, from('1.1.1.1'))).toBe(200)
+    expect(await status(handle, from('1.1.1.1'))).toBe(429)
+    expect(await status(handle, from('2.2.2.2'))).toBe(200)
+  })
+
+  it('refuses before spending an AI call or any of the daily allowance', async () => {
+    const handle = withLimits(fakeLimiter(0), fakeLimiter(0))
+    await handle(from('1.1.1.1'))
+    expect(ai.calls).toHaveLength(0)
+    expect(kv.keys('cap:')).toEqual([])
+  })
+
+  it('holds back requests for new sentences sooner, and still lets the stored ones through', async () => {
+    const handle = withLimits(fakeLimiter(10), fakeLimiter(1))
+    expect(await status(handle, from('1.1.1.1', preset({ fresh: true })))).toBe(200)
+    expect(await status(handle, from('1.1.1.1', preset({ fresh: true })))).toBe(429)
+    expect(await status(handle, from('1.1.1.1', preset()))).toBe(200)
+  })
+
+  it('does not count ordinary requests against the limit for new sentences', async () => {
+    const fresh = fakeLimiter(10)
+    const handle = withLimits(fakeLimiter(10), fresh)
+    await handle(from('1.1.1.1'))
+    expect(fresh.keys.size).toBe(0)
+  })
+
+  it('lets requests through when the limiter breaks, since the daily allowance still applies', async () => {
+    const broken = { limit: async () => Promise.reject(new Error('down')) }
+    const handle = createHandler({ ai, kv, allowedOrigins: [ORIGIN], limiters: { requests: broken, fresh: broken }, now: () => now, random: () => random })
+    expect(await status(handle as ReturnType<typeof withLimits>, from('1.1.1.1', preset({ fresh: true })))).toBe(200)
+  })
+
+  it('does not limit requests without a client address, so one missing header cannot lock everyone out', async () => {
+    const handle = withLimits(fakeLimiter(0), fakeLimiter(0))
+    expect(await status(handle, post(preset()))).toBe(200)
+  })
+
+  it('answers the preflight request without counting it', async () => {
+    const requests = fakeLimiter(0)
+    const handle = withLimits(requests, fakeLimiter(0))
+    const response = await handle(new Request('https://worker.example/', { method: 'OPTIONS', headers: { Origin: ORIGIN, 'CF-Connecting-IP': '1.1.1.1' } }))
+    expect(response.status).toBe(204)
+    expect(requests.keys.size).toBe(0)
+  })
+})

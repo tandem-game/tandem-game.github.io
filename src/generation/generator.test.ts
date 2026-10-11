@@ -47,6 +47,10 @@ describe('createHttpGenerator', () => {
     const kindFor = (response: () => Promise<Response>) =>
       kindOf(createHttpGenerator(URL, { fetch: response }).generate(request))
 
+    it('429 asking to slow down is not the allowance running out, so it can be tried again', async () => {
+      expect(await kindFor(() => answer({ error: 'slow-down' }, 429))).toBe('unavailable')
+    })
+
     it('429 means the free allowance is used up', async () => {
       expect(await kindFor(() => answer({ error: 'limit-reached' }, 429))).toBe('limit-reached')
     })

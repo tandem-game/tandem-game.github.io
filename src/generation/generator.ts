@@ -31,7 +31,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 function failureKind(status: number, text: string): GenerationErrorKind {
-  if (status === 429) return 'limit-reached'
+  if (status === 429) {
+    // A client that asks too often is told to slow down: that passes, unlike the daily allowance running out.
+    try {
+      const body: unknown = JSON.parse(text)
+      if (isRecord(body) && body.error === 'slow-down') return 'unavailable'
+    } catch {
+      // not our Worker's JSON
+    }
+    return 'limit-reached'
+  }
   if (status === 400 || status === 413) return 'invalid'
   // 403 means this site is not allowed to use the service: a setup problem, not bad sentences.
   if (status >= 500) {

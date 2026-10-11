@@ -11,5 +11,21 @@ binding = "AI"
 [[kv_namespaces]]
 binding = "POOL"
 
+# Per-client limits (Rate Limiting binding; the period can only be 10 or 60 seconds). The counts are per Cloudflare
+# location and approximate, so they stop scripts, not exact accounting. The namespace ids only have to be unique in the account.
+[[ratelimits]]
+name = "REQUEST_LIMIT"
+namespace_id = "1001"
+[ratelimits.simple]
+limit = 6
+period = 60
+
+[[ratelimits]]
+name = "FRESH_LIMIT"
+namespace_id = "1002"
+[ratelimits.simple]
+limit = 2
+period = 60
+
 [vars]
 ALLOWED_ORIGINS = "https://tandem-game.github.io,http://localhost:5173,http://localhost:4173"

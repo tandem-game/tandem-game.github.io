@@ -13,11 +13,21 @@ export interface KvStore {
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
 }
 
+/** Cloudflare's Rate Limiting binding: `success` is false once the key has used its allowance for the period. */
+export interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>
+}
+
 export interface Deps {
   ai: AiBinding
   kv: KvStore
   /** Websites allowed to call the Worker from a browser. */
   allowedOrigins: readonly string[]
+  /**
+   * Per-client limits, keyed by IP address: `requests` for every request, and `fresh` (counted on top of it) for the
+   * ones that skip the stored sentences, which are the cheapest way to use up the daily allowance. Leave out to skip them.
+   */
+  limiters?: { requests: RateLimiter; fresh: RateLimiter }
   /** Most AI calls per UTC day. Keeps KV writes (1,000 a day on the free plan) and neurons in budget. */
   dailyCap?: number
   now?: () => Date
@@ -190,7 +200,7 @@ function logRejection({ language, count, difficulty }: GenerateRequest, attempt:
 const isOutOfCapacity = (error: unknown) =>
   error instanceof Error && /4006|daily free allocation|out of capacity/i.test(error.message)
 
-export function createHandler({ ai, kv, allowedOrigins, dailyCap = DEFAULT_DAILY_CAP, now = () => new Date(), random = Math.random }: Deps) {
+export function createHandler({ ai, kv, allowedOrigins, limiters, dailyCap = DEFAULT_DAILY_CAP, now = () => new Date(), random = Math.random }: Deps) {
   const reply = (status: number, body: unknown, headers: HeadersInit = {}) =>
     new Response(JSON.stringify(body), {
       status,
@@ -291,6 +301,16 @@ export function createHandler({ ai, kv, allowedOrigins, dailyCap = DEFAULT_DAILY
     return outcome.error === 'limit-reached' && pool.length > 0 ? fromPool() : outcome
   }
 
+  /** True when this client has used up its allowance. A limiter that breaks lets the request through: the daily cap still applies. */
+  async function overLimit(limiter: RateLimiter | undefined, client: string | null): Promise<boolean> {
+    if (!limiter || client === null) return false
+    try {
+      return !(await limiter.limit({ key: client })).success
+    } catch {
+      return false
+    }
+  }
+
   return async function handle(request: Request): Promise<Response> {
     const origin = request.headers.get('Origin')
     if (origin !== null && !allowedOrigins.includes(origin)) return reply(403, { error: 'forbidden' })
@@ -309,6 +329,11 @@ export function createHandler({ ai, kv, allowedOrigins, dailyCap = DEFAULT_DAILY
     }
     if (request.method !== 'POST') return reply(405, { error: 'method-not-allowed' }, cors)
 
+    // Before reading the body, so a flood costs as little as possible. Cloudflare always sets this header.
+    const client = request.headers.get('CF-Connecting-IP')
+    const slowDown = () => reply(429, { error: 'slow-down' }, { ...cors, 'Retry-After': '60' })
+    if (await overLimit(limiters?.requests, client)) return slowDown()
+
     const declaredSize = Number(request.headers.get('Content-Length') ?? 0)
     const text = declaredSize > MAX_BODY_BYTES ? null : await request.text()
     if (text === null || text.length > MAX_BODY_BYTES) return reply(413, { error: 'too-large' }, cors)
@@ -321,6 +346,7 @@ export function createHandler({ ai, kv, allowedOrigins, dailyCap = DEFAULT_DAILY
     }
     const parsed = parseGenerateRequest(body)
     if (parsed === null) return reply(400, { error: 'bad-request' }, cors)
+    if (parsed.fresh && (await overLimit(limiters?.fresh, client))) return slowDown()
 
     const outcome = await sentencesFor(parsed)
     return 'sentences' in outcome
