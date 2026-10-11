@@ -219,3 +219,48 @@ describe('TurnView', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/waiting for the host/i)
   })
 })
+
+describe('TurnView favourites', () => {
+  const api = (saved = false) => ({ has: vi.fn(() => saved), toggle: vi.fn(() => 'added' as const) })
+
+  it('has no star unless it is given somewhere to save', () => {
+    setup(playing)
+    expect(screen.queryByRole('button', { name: /sentence|favourites/i })).not.toBeInTheDocument()
+  })
+
+  it('saves the sentence with its translation and languages, even while the translation is hidden', async () => {
+    const favourites = api()
+    const user = userEvent.setup()
+    render(
+      <TurnView game={playing} languages={languages} canAct onNext={vi.fn()} onReveal={vi.fn()} favourites={favourites} favouriteContext={{ topic: 'weather', difficulty: 'B1' }} />,
+    )
+    await user.click(screen.getByRole('button', { name: /Save sentence/ }))
+    expect(favourites.toggle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'Ich kann schwimmen.',
+        translation: 'Ich kann schwimmen. (translated)',
+        textLanguage: 'de',
+        translationLanguage: 'en',
+        topic: 'weather',
+        difficulty: 'B1',
+      }),
+    )
+  })
+
+  it('offers to remove a sentence that is already saved, to the player who is only listening too', () => {
+    render(<TurnView game={playing} languages={languages} canAct={false} onNext={vi.fn()} onReveal={vi.fn()} favourites={api(true)} />)
+    expect(screen.getByRole('button', { name: /Remove from favourites/ })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['full', /favourites are full/],
+    ['failed', /wouldn't keep it/],
+  ] as const)('says so when saving is %s, and the game stays usable', async (result, message) => {
+    const user = userEvent.setup()
+    const favourites = { has: () => false, toggle: () => result }
+    render(<TurnView game={playing} languages={languages} canAct onNext={vi.fn()} onReveal={vi.fn()} favourites={favourites} />)
+    await user.click(screen.getByRole('button', { name: /Save sentence/ }))
+    expect(screen.getByRole('status')).toHaveTextContent(message)
+    expect(screen.getByRole('button', { name: 'Show translation' })).toBeEnabled()
+  })
+})

@@ -680,3 +680,107 @@ button.link:disabled {
   opacity: 1;
   cursor: default;
 }
+
+/* The sentence with its heart beside it; a message about saving goes on its own line below. */
+.sentence-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.sentence-row .sentence {
+  flex: 1 1 12rem;
+}
+
+.sentence-row .favourite-problem {
+  flex-basis: 100%;
+}
+
+button.heart {
+  flex: none;
+  min-width: 2.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+button.heart.saved {
+  color: #e0245e;
+}
+
+.favourites-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.favourites-tools input[type='search'] {
+  flex: 1 1 12rem;
+  min-height: 3rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.favourites-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.favourites-table th,
+.favourites-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.favourites-table th {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.favourites-table .meta {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.favourites-table button {
+  min-height: 2.5rem;
+  padding: 0.25rem 0.75rem;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.file-button input {
+  display: block;
+  margin-top: var(--space-1);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

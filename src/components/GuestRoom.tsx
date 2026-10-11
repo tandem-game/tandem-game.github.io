@@ -7,6 +7,7 @@ import { useGuestSession, type GuestSession } from '../online/useGuestSession'
 import { PlayerChips } from './PlayerChips'
 import { StepIndicator } from './StepIndicator'
 import { TurnView } from './TurnView'
+import { useFavourites } from '../favourites/useFavourites'
 import { Waiting } from './Waiting'
 import { WritingSentences } from './WritingSentences'
 
@@ -29,6 +30,7 @@ const PROBLEMS: Record<Exclude<GuestSession['status'], 'connecting' | 'connected
 
 /** The device that joined: it is Player 2 and shows what the host says is happening. */
 export function GuestRoom({ network, languages, saved, code, onRetry, onChangeCode, onLeave }: GuestRoomProps) {
+  const favourites = useFavourites()
   const { status, room, nextTurn, reveal } = useGuestSession(network, code, saved)
 
   function renderBody() {
@@ -91,7 +93,7 @@ export function GuestRoom({ network, languages, saved, code, onRetry, onChangeCo
       <>
         <PlayerChips pair={pair} languages={languages} me={2} />
         <p className="topic">Topic: {topicName(staticSource, round.topic)}</p>
-        <TurnView game={game} languages={languages} canAct={myTurn} onNext={nextTurn} onReveal={reveal} />
+        <TurnView game={game} languages={languages} canAct={myTurn} onNext={nextTurn} onReveal={reveal} favourites={favourites} favouriteContext={{ topic: round.topic }} />
       </>
     )
   }

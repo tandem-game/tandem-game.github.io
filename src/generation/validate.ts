@@ -3,7 +3,7 @@ import { DEFAULT_COUNT } from './types'
 
 const MIN_WORDS = 3
 const MAX_WORDS = 22
-const MAX_CHARACTERS = 160
+export const MAX_CHARACTERS = 160
 
 export type ParseResult =
   | { ok: true; sentences: string[] }

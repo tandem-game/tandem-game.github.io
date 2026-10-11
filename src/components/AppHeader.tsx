@@ -4,11 +4,12 @@ interface AppHeaderProps {
     /** Each one is left out where the player already is: its link then stays, marked as the current page. */
     onHome?: () => void
     onHowToPlay?: () => void
+    onFavourites?: () => void
     onSettings?: () => void
   }
 }
 
-/** The title and tagline, with "Home", "How to play" and "Settings" at the top right outside a game. */
+/** The title and tagline, with "Home", "How to play", "Favourites" and "Settings" at the top right outside a game. */
 export function AppHeader({ menu }: AppHeaderProps) {
   const link = (label: string, onClick?: () => void) => (
     <button type="button" className="link" onClick={onClick} aria-current={onClick ? undefined : 'page'} disabled={!onClick}>
@@ -21,6 +22,7 @@ export function AppHeader({ menu }: AppHeaderProps) {
         <nav className="header-links" aria-label="Help and settings">
           {link('Home', menu.onHome)}
           {link('How to play', menu.onHowToPlay)}
+          {link('Favourites', menu.onFavourites)}
           {link('Settings', menu.onSettings)}
         </nav>
       )}

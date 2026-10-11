@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import type { Language } from '../content/types'
+import { favouriteFromTurn, type FavouriteContext } from '../favourites/fromTurn'
+import type { FavouritesApi } from '../favourites/useFavourites'
 import type { GameState } from '../game/gameReducer'
+import { FavouriteStar } from './FavouriteStar'
 import { Spinner } from './Spinner'
 
 interface TurnViewProps {
@@ -15,10 +18,14 @@ interface TurnViewProps {
   onPlayAgain?: () => void
   /** Only given on a device that may go back to the previous sentence, whoever's turn it is. */
   onPrevious?: () => void
+  /** Where a sentence can be saved; without it there is no star. */
+  favourites?: FavouritesApi
+  /** The round's topic and level, for the saved sentence's label. */
+  favouriteContext?: FavouriteContext
 }
 
 /** Shows a round from the host's copy of the game; it owns no state itself. */
-export function TurnView({ game, languages, canAct, onNext, onReveal, onPlayAgain, onPrevious }: TurnViewProps) {
+export function TurnView({ game, languages, canAct, onNext, onReveal, onPlayAgain, onPrevious, favourites, favouriteContext }: TurnViewProps) {
   // Either player can step back, so the other one is told when the sentence changes under them.
   // A finished round counts as one step past the last turn, since stepping back from it reopens that turn.
   const position = game.status === 'finished' ? game.turns.length : game.index
@@ -76,7 +83,10 @@ export function TurnView({ game, languages, canAct, onNext, onReveal, onPlayAgai
       <h2>
         {canAct ? 'Your turn' : "Your partner's turn"}: translate into {learning}
       </h2>
-      <p className="sentence">{turn.sentence.text}</p>
+      <div className="sentence-row">
+        <p className="sentence">{turn.sentence.text}</p>
+        {favourites && <FavouriteStar favourite={favouriteFromTurn(turn, favouriteContext)} favourites={favourites} />}
+      </div>
       {game.revealed && (
         <p className="translation">
           <span className="preview-who">Translation</span>

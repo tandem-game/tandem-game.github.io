@@ -15,6 +15,7 @@ import { Spinner } from './Spinner'
 import { StepIndicator } from './StepIndicator'
 import { TopicPicker } from './TopicPicker'
 import { TurnView } from './TurnView'
+import { useFavourites } from '../favourites/useFavourites'
 import { Waiting } from './Waiting'
 import { WritingSentences } from './WritingSentences'
 
@@ -44,6 +45,7 @@ export function HostRoom({ network, languages, host, firstRound, generator, onLe
   })
   const { state: setupState, back: backToTopics } = setup
   const [options, setOptions] = useState(firstRound.options)
+  const favourites = useFavourites()
   const step = pair === null ? 1 : round === null ? 2 : 3
 
   // Once the partner has joined, the sentences can be written: the host already chose what for.
@@ -148,6 +150,8 @@ export function HostRoom({ network, languages, host, firstRound, generator, onLe
           game={game}
           languages={languages}
           canAct={myTurn}
+          favourites={favourites}
+          favouriteContext={{ topic: round.topic, difficulty: options.difficulty }}
           onNext={() => dispatch({ type: 'NEXT_TURN', from: 1 })}
           onReveal={() => dispatch({ type: 'REVEAL', from: 1 })}
           onPrevious={() => dispatch({ type: 'PREVIOUS_TURN' })}

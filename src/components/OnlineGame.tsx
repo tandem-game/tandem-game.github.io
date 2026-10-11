@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { staticSource } from '../content/staticSource'
 import type { Language } from '../content/types'
+import type { Turn } from '../game/buildTurns'
 import { loadLastTopic, loadSettingsStatus, saveHostDefaults, saveLastTopic, suggestHostDefaults } from '../game/hostPreferences'
 import type { SentenceGenerator } from '../generation/generator'
 import type { Network } from '../online/network'
 import { AppHeader } from './AppHeader'
+import { PRACTISE_TOPIC } from '../favourites/practise'
+import { Favourites } from './Favourites'
 import { GuestRoom } from './GuestRoom'
 import { HostRoom } from './HostRoom'
 import { HostSetup, type HostSettings } from './HostSetup'
@@ -19,6 +22,9 @@ type Stage =
   | { kind: 'tutorial'; returnTo?: Stage }
   /** Setting the host's defaults; `returnTo` is where saving goes, and back too unless this is the first visit. */
   | { kind: 'settings'; returnTo: Stage }
+  | { kind: 'favourites' }
+  /** A round of the player's own favourite sentences. */
+  | { kind: 'practise'; turns: Turn[] }
   | { kind: 'solo-setup' }
   | { kind: 'solo'; settings: HostSettings }
   | { kind: 'menu' }
@@ -86,6 +92,7 @@ export function OnlineGame({ network, languages, initialCode, generator }: Onlin
           ? {
               onHome: stage.kind === 'mode' ? undefined : toMode,
               onHowToPlay: stage.kind === 'tutorial' ? undefined : () => setStage({ kind: 'tutorial', returnTo: stage }),
+              onFavourites: stage.kind === 'favourites' ? undefined : () => setStage({ kind: 'favourites' }),
               onSettings: stage.kind === 'settings' ? undefined : editFrom(origin),
             }
           : undefined
@@ -121,6 +128,20 @@ export function OnlineGame({ network, languages, initialCode, generator }: Onlin
 
       case 'settings':
         return settingsScreen(stage.returnTo, defaults ? () => setStage(stage.returnTo) : undefined)
+
+      case 'favourites':
+        return <Favourites languages={languages} defaults={defaults} onPractise={(turns) => setStage({ kind: 'practise', turns })} />
+
+      case 'practise':
+        // Without saved settings there is no practice button, so these are always there.
+        return defaults === null ? null : (
+          <SoloGame
+            languages={languages}
+            settings={{ knows: defaults.knows, learns: defaults.learns, options: defaults.options, topic: PRACTISE_TOPIC }}
+            practise={stage.turns}
+            onLeave={() => setStage({ kind: 'favourites' })}
+          />
+        )
 
       case 'solo-setup':
         if (defaults === null) return settingsScreen(stage, toMode)
