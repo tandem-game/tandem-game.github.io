@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { staticSource } from '../content/staticSource'
 import type { Language } from '../content/types'
-import { loadHostDefaults, loadLastTopic, saveHostDefaults, saveLastTopic, suggestHostDefaults } from '../game/hostPreferences'
+import { loadLastTopic, loadSettingsStatus, saveHostDefaults, saveLastTopic, suggestHostDefaults } from '../game/hostPreferences'
 import type { SentenceGenerator } from '../generation/generator'
 import type { Network } from '../online/network'
 import { GuestRoom } from './GuestRoom'
@@ -37,17 +37,18 @@ interface OnlineGameProps {
 
 /** Walks the players from creating or joining a game, through to playing it. */
 export function OnlineGame({ network, languages, initialCode, generator }: OnlineGameProps) {
-  const [defaults, setDefaults] = useState(loadHostDefaults)
+  const [status, setStatus] = useState(loadSettingsStatus)
+  // Games start from complete settings only: while some need the player's attention, there are none.
+  const defaults = status.kind === 'complete' ? status.defaults : null
   const [lastTopic, setLastTopic] = useState(loadLastTopic)
-  // Someone with an invite link joins at once (asking for their settings first if they have none). Anyone else is first
-  // shown the tutorial, then asked to save their settings.
-  const [stage, setStage] = useState<Stage>(() =>
-    initialCode
-      ? { kind: 'guest', code: initialCode, attempt: 1 }
-      : defaults
-        ? { kind: 'mode' }
-        : { kind: 'tutorial' },
-  )
+  // Someone with an invite link joins at once (asking for their settings first if they need to look at them). Anyone
+  // else is first shown the tutorial, then asked to save their settings; a returning player whose saved settings are
+  // incomplete or outdated goes straight to them, with what needs their attention highlighted.
+  const [stage, setStage] = useState<Stage>(() => {
+    if (initialCode) return { kind: 'guest', code: initialCode, attempt: 1 }
+    if (status.kind === 'complete') return { kind: 'mode' }
+    return status.kind === 'none' ? { kind: 'tutorial' } : { kind: 'settings', returnTo: { kind: 'mode' } }
+  })
   // Leaving a two-player game, or backing out of its screens, returns to the create-or-join menu.
   const toMenu = () => setStage({ kind: 'menu' })
   const toMode = () => setStage({ kind: 'mode' })
@@ -58,10 +59,12 @@ export function OnlineGame({ network, languages, initialCode, generator }: Onlin
   const settingsScreen = (returnTo: Stage, onBack?: () => void) => (
     <SettingsForm
       languages={languages}
-      defaults={defaults ?? suggestHostDefaults()}
+      defaults={status.kind === 'incomplete' ? status.draft : (defaults ?? suggestHostDefaults())}
+      missing={status.kind === 'incomplete' ? status.missing : undefined}
+      fresh={status.kind === 'incomplete' ? status.fresh : undefined}
       onSave={(saved) => {
         saveHostDefaults(saved)
-        setDefaults(saved)
+        setStatus({ kind: 'complete', defaults: saved })
         setStage(returnTo)
       }}
       onBack={onBack}

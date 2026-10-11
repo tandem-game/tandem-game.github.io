@@ -7,11 +7,13 @@ import { SettingsForm } from './SettingsForm'
 
 const languages = staticSource.getLanguages()
 
-function setup(defaults = null as React.ComponentProps<typeof SettingsForm>['defaults'], withBack = true) {
+type Props = React.ComponentProps<typeof SettingsForm>
+
+function setup(defaults = null as Props['defaults'], withBack = true, flags: Pick<Props, 'missing' | 'fresh'> = {}) {
   const onSave = vi.fn()
   const onBack = vi.fn()
   const user = userEvent.setup()
-  render(<SettingsForm languages={languages} defaults={defaults} onSave={onSave} onBack={withBack ? onBack : undefined} />)
+  render(<SettingsForm languages={languages} defaults={defaults} {...flags} onSave={onSave} onBack={withBack ? onBack : undefined} />)
   return { user, onSave, onBack }
 }
 
@@ -81,3 +83,81 @@ describe('SettingsForm', () => {
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
   })
 })
+
+describe('SettingsForm highlights', () => {
+  const saved = { knows: 'de', learns: 'en', options: { count: 3, difficulty: 'easy', review: true } } as const
+  const field = (label: string) => screen.getByLabelText(label).closest('.field')
+
+  it('points out both languages when neither is set, and says why Save is off', () => {
+    setup()
+    for (const label of ['I speak', "I'm learning"]) {
+      expect(screen.getByLabelText(label)).toBeInvalid()
+      expect(screen.getByLabelText(label)).toHaveAccessibleDescription(/Choose a language to continue/)
+      expect(field(label)).toHaveAttribute('data-flag', 'missing')
+    }
+    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveAccessibleDescription(
+      "To save, choose the language you speak and the language you're learning.",
+    )
+  })
+
+  it('points out only the language that is unset, and stops once it is chosen', async () => {
+    const { user } = setup({ ...saved, learns: '' }, false, { missing: ['learns'] })
+    expect(screen.getByLabelText('I speak')).toBeValid()
+    expect(field('I speak')).not.toHaveAttribute('data-flag')
+    expect(screen.getByLabelText("I'm learning")).toBeInvalid()
+    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveAccessibleDescription("To save, choose the language you're learning.")
+
+    await user.selectOptions(screen.getByLabelText("I'm learning"), 'en')
+    expect(screen.getByLabelText("I'm learning")).toBeValid()
+    expect(field("I'm learning")).not.toHaveAttribute('data-flag')
+    expect(screen.getByRole('button', { name: 'Save settings' })).not.toHaveAccessibleDescription()
+  })
+
+  it('points out a language again when choosing the other one clears it', async () => {
+    const { user } = setup(saved)
+    expect(screen.getByLabelText("I'm learning")).toBeValid()
+    await user.selectOptions(screen.getByLabelText('I speak'), 'en')
+    expect(screen.getByLabelText("I'm learning")).toBeInvalid()
+  })
+
+  it('highlights nothing, and says nothing, when everything is set', () => {
+    setup(saved)
+    expect(document.querySelector('[data-flag]')).toBeNull()
+    expect(screen.queryByText(/need your attention/)).not.toBeInTheDocument()
+  })
+
+  it('tells the player something needs their attention, once, at the top', () => {
+    setup({ ...saved, learns: '' }, false, { missing: ['learns'] })
+    expect(screen.getAllByText(/Some settings need your attention before you play/)).toHaveLength(1)
+  })
+
+  it('marks a new setting, keeps its value, and stops marking it once the player changes it', async () => {
+    const { user, onSave } = setup(saved, false, { fresh: ['review'] })
+    expect(field('Review sentences before the round')).toHaveAttribute('data-flag', 'new')
+    expect(screen.getByLabelText('Review sentences before the round')).toHaveAccessibleDescription(/New setting\. Check it, then save\./)
+    expect(screen.getByText(/Some settings need your attention/)).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Review sentences before the round'))
+    expect(field('Review sentences before the round')).not.toHaveAttribute('data-flag')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({ ...saved, options: { ...saved.options, review: false } })
+  })
+
+  it('lets a new setting be saved as it is, without touching it', async () => {
+    const { user, onSave } = setup(saved, false, { fresh: ['difficulty'] })
+    expect(field('Difficulty')).toHaveAttribute('data-flag', 'new')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(saved)
+  })
+
+  it('marks an option with no saved value as not set, and keeps the others unmarked', async () => {
+    const { user } = setup(saved, false, { missing: ['count'] })
+    expect(field('Sentences per player')).toHaveAttribute('data-flag', 'missing')
+    expect(screen.getByLabelText('Sentences per player')).toHaveAccessibleDescription(/Not set yet/)
+    expect(field('Difficulty')).not.toHaveAttribute('data-flag')
+
+    await user.selectOptions(screen.getByLabelText('Sentences per player'), '4')
+    expect(field('Sentences per player')).not.toHaveAttribute('data-flag')
+  })
+})
+

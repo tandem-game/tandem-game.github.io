@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadHostDefaults, loadLastTopic, saveHostDefaults, saveLastTopic, suggestHostDefaults } from './hostPreferences'
+import {
+  SETTINGS_VERSION,
+  SETTING_ADDED_IN,
+  loadHostDefaults,
+  loadLastTopic,
+  loadSettingsStatus,
+  saveHostDefaults,
+  saveLastTopic,
+  suggestHostDefaults,
+} from './hostPreferences'
 
 const defaults = { knows: 'de', learns: 'en', options: { count: 4, difficulty: 'hard', review: true } } as const
 
@@ -64,6 +73,92 @@ describe('host defaults', () => {
     })
     expect(loadHostDefaults()).toBeNull()
     expect(() => saveHostDefaults(defaults)).not.toThrow()
+  })
+})
+
+describe('settings status', () => {
+  const store = (value: unknown) => localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify(value))
+
+  it('is none on a first visit and when what is stored is not an object', () => {
+    expect(loadSettingsStatus()).toEqual({ kind: 'none' })
+    for (const stored of ['nope', 'null', '"x"', '[1]']) {
+      localStorage.setItem('tandem.hostDefaults.v2', stored)
+      expect(loadSettingsStatus()).toEqual({ kind: 'none' })
+    }
+  })
+
+  it('is complete for a full save, whether or not it has a version', () => {
+    saveHostDefaults(defaults)
+    expect(loadSettingsStatus()).toEqual({ kind: 'complete', defaults })
+    store(defaults)
+    expect(loadSettingsStatus()).toEqual({ kind: 'complete', defaults })
+  })
+
+  it('keeps what is usable and says what is missing', () => {
+    store({ knows: 'de', options: { count: 4 } })
+    expect(loadSettingsStatus()).toEqual({
+      kind: 'incomplete',
+      draft: { knows: 'de', learns: '', options: { count: 4, difficulty: 'medium', review: false } },
+      missing: ['learns', 'difficulty'],
+      fresh: [],
+    })
+  })
+
+  it('has no saved options at all when the options are missing', () => {
+    store({ knows: 'en', learns: 'de' })
+    expect(loadSettingsStatus()).toMatchObject({ kind: 'incomplete', missing: ['count', 'difficulty'] })
+  })
+
+  it('keeps the language to speak when both are the same, and asks for the other', () => {
+    store({ ...defaults, learns: 'de' })
+    expect(loadSettingsStatus()).toMatchObject({ kind: 'incomplete', draft: { knows: 'de', learns: '' }, missing: ['learns'] })
+  })
+
+  it('asks again about a review flag that is not a boolean', () => {
+    store({ ...defaults, options: { ...defaults.options, review: 'no' } })
+    expect(loadSettingsStatus()).toMatchObject({ kind: 'incomplete', missing: ['review'] })
+  })
+
+  describe('when a setting is added later', () => {
+    const addedInTwo = { review: 2 } as const
+
+    it('is incomplete, with the new setting listed and everything else kept, for a save from before it', () => {
+      store(defaults) // no version: version 1
+      expect(loadSettingsStatus(addedInTwo)).toEqual({ kind: 'incomplete', draft: defaults, missing: [], fresh: ['review'] })
+      store({ version: 1, ...defaults })
+      expect(loadSettingsStatus(addedInTwo)).toMatchObject({ kind: 'incomplete', fresh: ['review'] })
+    })
+
+    it('is complete once saved by an app that has it, so they are asked only once', () => {
+      store({ version: 2, ...defaults })
+      expect(loadSettingsStatus(addedInTwo)).toEqual({ kind: 'complete', defaults })
+    })
+
+    it('does not ask about a setting the player has to fill in anyway twice', () => {
+      store({ knows: 'de', learns: 'en', options: { difficulty: 'easy' } })
+      expect(loadSettingsStatus({ count: 2 })).toMatchObject({ missing: ['count'], fresh: [] })
+    })
+
+    it('keeps the game from starting until the new setting is confirmed', () => {
+      store(defaults)
+      expect(loadSettingsStatus(addedInTwo).kind).toBe('incomplete')
+    })
+
+    it('treats a version that is not a whole number from 1 as 1', () => {
+      for (const version of [0, -1, 1.5, '2', null]) {
+        store({ version, ...defaults })
+        expect(loadSettingsStatus(addedInTwo)).toMatchObject({ kind: 'incomplete', fresh: ['review'] })
+      }
+    })
+  })
+
+  it('never lists a setting as added in a version the app does not have yet, which would ask again after every save', () => {
+    expect(Object.values(SETTING_ADDED_IN).every((version) => version <= SETTINGS_VERSION)).toBe(true)
+  })
+
+  it('writes the current version when saving', () => {
+    saveHostDefaults(defaults)
+    expect(JSON.parse(localStorage.getItem('tandem.hostDefaults.v2') ?? '{}')).toMatchObject({ version: SETTINGS_VERSION })
   })
 })
 

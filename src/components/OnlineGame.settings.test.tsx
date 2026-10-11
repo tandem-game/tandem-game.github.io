@@ -46,6 +46,71 @@ describe('the first visit', () => {
   })
 })
 
+describe('a returning player whose saved settings need a look', () => {
+  const store = (value: unknown) => localStorage.setItem('tandem.hostDefaults.v2', JSON.stringify(value))
+  const render_ = (initialCode?: string) => {
+    const view = render(<OnlineGame network={createMemoryNetwork()} languages={languages} initialCode={initialCode} />)
+    return within(view.container)
+  }
+
+  it('goes straight to the settings, not the tutorial, with what they had kept and the rest highlighted', () => {
+    store({ knows: 'de', options: { count: 4, difficulty: 'hard', review: true } })
+    const ui = render_()
+    expect(ui.queryByRole('heading', { name: 'Welcome to Tandem Game' })).not.toBeInTheDocument()
+    expect(ui.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    expect(ui.queryByRole('button', { name: '1 player' })).not.toBeInTheDocument()
+    expect(ui.getByLabelText('I speak')).toHaveValue('de')
+    expect(ui.getByLabelText('I speak')).toBeValid()
+    expect(ui.getByLabelText("I'm learning")).toHaveValue('')
+    expect(ui.getByLabelText("I'm learning")).toBeInvalid()
+    expect(ui.getByLabelText('Sentences per player')).toHaveValue('4')
+    expect(ui.getByLabelText('Difficulty')).toHaveValue('hard')
+    expect(ui.getByText(/need your attention/)).toBeInTheDocument()
+  })
+
+  it('cannot play until they have saved, and then reaches the start screen with everything kept', async () => {
+    const user = userEvent.setup()
+    store({ knows: 'de', options: { count: 4, difficulty: 'hard', review: true } })
+    const ui = render_()
+    expect(ui.getByRole('button', { name: 'Save settings' })).toBeDisabled()
+    expect(ui.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
+
+    await user.selectOptions(ui.getByLabelText("I'm learning"), 'en')
+    await user.click(ui.getByRole('button', { name: 'Save settings' }))
+    expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
+    expect(loadHostDefaults()).toEqual({ knows: 'de', learns: 'en', options: { count: 4, difficulty: 'hard', review: true } })
+  })
+
+  it('is asked about an option that has no saved value, with the default shown', () => {
+    store({ knows: 'de', learns: 'en', options: { difficulty: 'easy' } })
+    const ui = render_()
+    expect(ui.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    expect(ui.getByLabelText('Sentences per player')).toHaveAccessibleDescription(/Not set yet/)
+    expect(ui.getByLabelText('Difficulty')).toHaveValue('easy')
+  })
+
+  it('sees the same page before joining through an invite link, and joins once it is saved', async () => {
+    const user = userEvent.setup()
+    store({ learns: 'de', options: { count: 2, difficulty: 'medium', review: false } })
+    const ui = render_('999999')
+    expect(ui.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    expect(ui.getByLabelText("I'm learning")).toHaveValue('de')
+    expect(ui.getByLabelText('I speak')).toBeInvalid()
+    expect(ui.queryByRole('alert')).not.toBeInTheDocument()
+
+    await user.selectOptions(ui.getByLabelText('I speak'), 'en')
+    await user.click(ui.getByRole('button', { name: 'Save settings' }))
+    expect(await ui.findByRole('alert')).toHaveTextContent(/couldn't find a game/i) // it tried to join
+  })
+
+  it('does not interrupt a player whose settings are complete', () => {
+    store({ version: 1, knows: 'de', learns: 'en', options: { count: 2, difficulty: 'medium', review: false } })
+    const ui = render_()
+    expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
+    expect(ui.queryByText(/need your attention/)).not.toBeInTheDocument()
+  })
+})
+
 describe('Settings on the start screen', () => {
   it('opens the saved values, can be left with Back, and saves changes', async () => {
     const user = userEvent.setup()

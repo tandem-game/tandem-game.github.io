@@ -359,6 +359,31 @@ progress {
   font-weight: 400;
 }
 
+/* A setting that is not set yet, or is new to the player, stands out until they have dealt with it. */
+.field[data-flag] {
+  padding: var(--space-2);
+  border-left: 4px solid var(--accent);
+  border-radius: 0.5rem;
+  background: var(--p1-tint);
+}
+
+.field[data-flag='missing'] {
+  border-left-color: var(--danger);
+}
+
+.flag {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.field[data-flag='missing'] .flag {
+  color: var(--danger);
+}
+
+select[aria-invalid='true'] {
+  border: 2px solid var(--danger);
+}
+
 .help-levels {
   display: grid;
   gap: 0.25rem;

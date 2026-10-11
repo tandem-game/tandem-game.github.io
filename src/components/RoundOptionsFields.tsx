@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import { DIFFICULTIES, MAX_COUNT, MIN_COUNT, isDifficulty, type Difficulty, type RoundOptions } from '../generation/types'
+import { flagMessage, type Flags } from './settingFlags'
 
 interface RoundOptionsFieldsProps {
   options: RoundOptions
@@ -8,6 +9,8 @@ interface RoundOptionsFieldsProps {
   solo?: boolean
   /** Explain each option under it. */
   withHelp?: boolean
+  /** Options to highlight, because they are not set yet or are new to the player. */
+  flags?: Flags
 }
 
 const COUNTS = Array.from({ length: MAX_COUNT - MIN_COUNT + 1 }, (_, i) => MIN_COUNT + i)
@@ -25,14 +28,19 @@ const DIFFICULTY_HELP: Record<Difficulty, string> = {
 }
 
 /** The host's choices for a round: how many sentences, and how hard. */
-export function RoundOptionsFields({ options, onChange, solo = false, withHelp = false }: RoundOptionsFieldsProps) {
+export function RoundOptionsFields({ options, onChange, solo = false, withHelp = false, flags = {} }: RoundOptionsFieldsProps) {
   const id = useId()
-  const describedBy = (key: 'count' | 'difficulty' | 'review') => (withHelp ? `${id}-${key}` : undefined)
+  type Key = 'count' | 'difficulty' | 'review'
+  const describedBy = (key: Key) => [withHelp && `${id}-${key}`, flags[key] && `${id}-${key}-flag`].filter(Boolean).join(' ') || undefined
+  const flagged = (key: Key) => {
+    const flag = flags[key]
+    return flag && <small id={`${id}-${key}-flag`} className="flag">{flagMessage(key, flag)}</small>
+  }
 
   return (
     <fieldset className="round-options">
       <legend>Round options</legend>
-      <div className="field">
+      <div className="field" data-flag={flags.count}>
         <label>
           {solo ? 'Sentences' : 'Sentences per player'}
           <select
@@ -52,8 +60,9 @@ export function RoundOptionsFields({ options, onChange, solo = false, withHelp =
             {COUNT_HELP}
           </small>
         )}
+        {flagged('count')}
       </div>
-      <div className="field">
+      <div className="field" data-flag={flags.difficulty}>
         <label>
           Difficulty
           <select
@@ -77,8 +86,9 @@ export function RoundOptionsFields({ options, onChange, solo = false, withHelp =
             ))}
           </ul>
         )}
+        {flagged('difficulty')}
       </div>
-      <div className="field">
+      <div className="field" data-flag={flags.review}>
         <label className="check">
           <input
             type="checkbox"
@@ -93,6 +103,7 @@ export function RoundOptionsFields({ options, onChange, solo = false, withHelp =
             {REVIEW_HELP}
           </small>
         )}
+        {flagged('review')}
       </div>
     </fieldset>
   )
