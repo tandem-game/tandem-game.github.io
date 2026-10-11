@@ -11,14 +11,16 @@ const STEPS = [
   {
     title: 'On your own or with a partner',
     body: [
-      'Practise on your own, or play with a partner on their own device: you speak their language and they speak yours. One of you creates a game and shares its link or code, and your partner tells you if it sounds right.',
+      'Practise on your own, or play with a partner on their own device. If you speak each other’s language, you translate each other’s sentences. If you speak and learn the same languages, you take turns with the same sentences. One of you creates a game and shares its link or code, and your partner tells you if it sounds right.',
       'Stay on a call or sit together: translations are spoken, not typed.',
     ],
   },
 ] as const
 
-const FIRST_VISIT_NOTE = 'Next you pick the languages you speak and learn. They are saved in this browser, and you can change them any time with “Settings”.'
-const REPLAY_NOTE = 'Your languages are saved in this browser, and you can change them any time with “Settings”.'
+const FIRST_VISIT_NOTE =
+  'Next you pick the languages you speak and learn, how many sentences you read and the level, from A1 to C2. They are saved in this browser, and you can change them any time with “Settings”.'
+const REPLAY_NOTE =
+  'Your languages, the number of sentences and the level are saved in this browser, and you can change them any time with “Settings”.'
 
 interface TutorialProps {
   /** Called when the player reaches the end, or skips the tutorial. */
