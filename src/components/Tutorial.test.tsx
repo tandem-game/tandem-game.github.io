@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Tutorial } from './Tutorial'
 
-function setup() {
+function setup(replay = false) {
   const onDone = vi.fn()
-  render(<Tutorial onDone={onDone} />)
+  render(<Tutorial onDone={onDone} replay={replay} />)
   return { user: userEvent.setup(), onDone }
 }
 
@@ -38,5 +38,24 @@ describe('Tutorial', () => {
     const { user, onDone } = setup()
     await user.click(screen.getByRole('button', { name: 'Skip tutorial' }))
     expect(onDone).toHaveBeenCalledOnce()
+  })
+
+  describe('opened again from the start screen', () => {
+    it('ends with Done, and says nothing about choosing languages next', async () => {
+      const { user, onDone } = setup(true)
+      await user.click(screen.getByRole('button', { name: 'Next' }))
+      expect(screen.queryByText(/Next you pick the languages/)).not.toBeInTheDocument()
+      expect(screen.getByText(/Your languages are saved in this browser/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Choose my languages' })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Done' }))
+      expect(onDone).toHaveBeenCalledOnce()
+    })
+
+    it('can be left from the first step', async () => {
+      const { user, onDone } = setup(true)
+      expect(screen.queryByRole('button', { name: 'Skip tutorial' })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Back to the start' }))
+      expect(onDone).toHaveBeenCalledOnce()
+    })
   })
 })

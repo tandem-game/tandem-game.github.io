@@ -14,8 +14,8 @@ import { Tutorial } from './Tutorial'
 
 type Stage =
   | { kind: 'mode' }
-  /** A first visit begins here: what the game is, then the settings. */
-  | { kind: 'tutorial' }
+  /** A first visit begins here: what the game is, then the settings. Opened again from the start screen, it goes back there. */
+  | { kind: 'tutorial'; replay?: boolean }
   /** Setting the host's defaults; `returnTo` is where saving goes, and back too unless this is the first visit. */
   | { kind: 'settings'; returnTo: Stage }
   | { kind: 'solo-setup' }
@@ -84,6 +84,9 @@ export function OnlineGame({ network, languages, initialCode, generator }: Onlin
           <button type="button" onClick={toMenu}>
             2 players
           </button>
+          <button type="button" className="secondary" onClick={() => setStage({ kind: 'tutorial', replay: true })}>
+            How to play
+          </button>
           <button type="button" className="secondary" onClick={editFrom({ kind: 'mode' })}>
             Settings
           </button>
@@ -91,7 +94,7 @@ export function OnlineGame({ network, languages, initialCode, generator }: Onlin
       )
 
     case 'tutorial':
-      return <Tutorial onDone={() => setStage({ kind: 'settings', returnTo: { kind: 'mode' } })} />
+      return <Tutorial replay={stage.replay} onDone={stage.replay ? toMode : () => setStage({ kind: 'settings', returnTo: { kind: 'mode' } })} />
 
     case 'settings':
       return settingsScreen(stage.returnTo, defaults ? () => setStage(stage.returnTo) : undefined)

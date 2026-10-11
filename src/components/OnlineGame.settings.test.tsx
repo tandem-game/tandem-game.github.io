@@ -111,6 +111,27 @@ describe('a returning player whose saved settings need a look', () => {
   })
 })
 
+describe('How to play on the start screen', () => {
+  it('opens the tutorial and returns to the start screen, keeping the saved settings', async () => {
+    const user = userEvent.setup()
+    const { ui } = open(createMemoryNetwork())
+    await user.click(ui.getByRole('button', { name: 'How to play' }))
+    expect(ui.getByRole('heading', { name: 'Welcome to Tandem Game' })).toBeInTheDocument()
+    await user.click(ui.getByRole('button', { name: 'Next' }))
+    await user.click(ui.getByRole('button', { name: 'Done' }))
+    expect(ui.getByRole('button', { name: '1 player' })).toBeInTheDocument()
+    expect(loadHostDefaults()).toMatchObject({ knows: 'de', learns: 'en' })
+  })
+
+  it('can be left from the first step without reading it', async () => {
+    const user = userEvent.setup()
+    const { ui } = open(createMemoryNetwork())
+    await user.click(ui.getByRole('button', { name: 'How to play' }))
+    await user.click(ui.getByRole('button', { name: 'Back to the start' }))
+    expect(ui.getByRole('button', { name: '2 players' })).toBeInTheDocument()
+  })
+})
+
 describe('Settings on the start screen', () => {
   it('opens the saved values, can be left with Back, and saves changes', async () => {
     const user = userEvent.setup()
