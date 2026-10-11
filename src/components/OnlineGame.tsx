@@ -4,6 +4,7 @@ import type { Language } from '../content/types'
 import { loadLastTopic, loadSettingsStatus, saveHostDefaults, saveLastTopic, suggestHostDefaults } from '../game/hostPreferences'
 import type { SentenceGenerator } from '../generation/generator'
 import type { Network } from '../online/network'
+import { AppHeader } from './AppHeader'
 import { GuestRoom } from './GuestRoom'
 import { HostRoom } from './HostRoom'
 import { HostSetup, type HostSettings } from './HostSetup'
@@ -14,8 +15,8 @@ import { Tutorial } from './Tutorial'
 
 type Stage =
   | { kind: 'mode' }
-  /** A first visit begins here: what the game is, then the settings. Opened again from the start screen, it goes back there. */
-  | { kind: 'tutorial'; replay?: boolean }
+  /** A first visit begins here: what the game is, then the settings. Opened from the header, `returnTo` is where Done goes. */
+  | { kind: 'tutorial'; returnTo?: Stage }
   /** Setting the host's defaults; `returnTo` is where saving goes, and back too unless this is the first visit. */
   | { kind: 'settings'; returnTo: Stage }
   | { kind: 'solo-setup' }
@@ -72,129 +73,145 @@ export function OnlineGame({ network, languages, initialCode, generator }: Onlin
   )
   const editFrom = (returnTo: Stage) => () => setStage({ kind: 'settings', returnTo })
 
-  switch (stage.kind) {
-    case 'mode':
-      return (
-        <section className="card">
-          <h2>Start a game</h2>
-          <p>Practise on your own, or with a partner who plays on their own device.</p>
-          <button type="button" className="primary" onClick={() => setStage({ kind: 'solo-setup' })}>
-            1 player
-          </button>
-          <button type="button" onClick={toMenu}>
-            2 players
-          </button>
-          <button type="button" className="secondary" onClick={() => setStage({ kind: 'tutorial', replay: true })}>
-            How to play
-          </button>
-          <button type="button" className="secondary" onClick={editFrom({ kind: 'mode' })}>
-            Settings
-          </button>
-        </section>
-      )
+  // The header's links are there outside a running game, and not on the first visit's tutorial, which leads on to the
+  // settings anyway. Each one opens from, and returns to, the screen the player is on (or came from).
+  const inGame = stage.kind === 'solo' || stage.kind === 'host' || stage.kind === 'guest'
+  const firstVisit = stage.kind === 'tutorial' && !stage.returnTo
+  const origin = stage.kind === 'tutorial' ? stage.returnTo : stage
+  const showLinks = !inGame && !firstVisit && origin !== undefined
+  const header = (
+    <AppHeader
+      onHowToPlay={showLinks && stage.kind !== 'tutorial' ? () => setStage({ kind: 'tutorial', returnTo: stage }) : undefined}
+      onSettings={showLinks && stage.kind !== 'settings' && origin ? editFrom(origin) : undefined}
+    />
+  )
 
-    case 'tutorial':
-      return <Tutorial replay={stage.replay} onDone={stage.replay ? toMode : () => setStage({ kind: 'settings', returnTo: { kind: 'mode' } })} />
+  return (
+    <>
+      {header}
+      {screen()}
+    </>
+  )
 
-    case 'settings':
-      return settingsScreen(stage.returnTo, defaults ? () => setStage(stage.returnTo) : undefined)
+  function screen() {
+    switch (stage.kind) {
+      case 'mode':
+        return (
+          <section className="card">
+            <h2>Start a game</h2>
+            <p>Practise on your own, or with a partner who plays on their own device.</p>
+            <button type="button" className="primary" onClick={() => setStage({ kind: 'solo-setup' })}>
+              1 player
+            </button>
+            <button type="button" onClick={toMenu}>
+              2 players
+            </button>
+          </section>
+        )
 
-    case 'solo-setup':
-      if (defaults === null) return settingsScreen(stage, toMode)
-      return (
-        <HostSetup
-          languages={languages}
-          topics={staticSource.getTopics()}
-          defaults={defaults}
-          lastTopic={lastTopic}
-          onEdit={editFrom(stage)}
-          onCreate={(settings) => {
-            remember(settings)
-            setStage({ kind: 'solo', settings })
-          }}
-          onBack={toMode}
-          solo
-        />
-      )
+      case 'tutorial':
+        return <Tutorial replay={stage.returnTo !== undefined} onDone={() => setStage(stage.returnTo ?? { kind: 'settings', returnTo: { kind: 'mode' } })} />
 
-    case 'solo':
-      return <SoloGame languages={languages} settings={stage.settings} generator={generator} onLeave={toMode} />
+      case 'settings':
+        return settingsScreen(stage.returnTo, defaults ? () => setStage(stage.returnTo) : undefined)
 
-    case 'menu':
-      return (
-        <section className="card">
-          <h2>Play with a partner</h2>
-          <p>
-            Each of you uses your own device: one of you creates a game and shares its link or code, and the other
-            joins with it. You say your translations out loud, so stay on a call or sit together.
-          </p>
-          <button type="button" className="primary" onClick={() => setStage({ kind: 'host-setup' })}>
-            Create a game
-          </button>
-          <button type="button" onClick={() => setStage({ kind: 'join-setup' })}>
-            Join a game
-          </button>
-          <button type="button" className="secondary" onClick={toMode}>
-            Back
-          </button>
-        </section>
-      )
+      case 'solo-setup':
+        if (defaults === null) return settingsScreen(stage, toMode)
+        return (
+          <HostSetup
+            languages={languages}
+            topics={staticSource.getTopics()}
+            defaults={defaults}
+            lastTopic={lastTopic}
+            onEdit={editFrom(stage)}
+            onCreate={(settings) => {
+              remember(settings)
+              setStage({ kind: 'solo', settings })
+            }}
+            onBack={toMode}
+            solo
+          />
+        )
 
-    case 'host-setup':
-      if (defaults === null) return settingsScreen(stage, toMenu)
-      return (
-        <HostSetup
-          languages={languages}
-          topics={staticSource.getTopics()}
-          defaults={defaults}
-          lastTopic={lastTopic}
-          onEdit={editFrom(stage)}
-          onCreate={(settings) => {
-            remember(settings)
-            setStage({ kind: 'host', settings })
-          }}
-          onBack={toMenu}
-        />
-      )
+      case 'solo':
+        return <SoloGame languages={languages} settings={stage.settings} generator={generator} onLeave={toMode} />
 
-    case 'host':
-      return (
-        <HostRoom
-          network={network}
-          languages={languages}
-          host={{ knows: stage.settings.knows, learns: stage.settings.learns }}
-          firstRound={stage.settings}
-          generator={generator}
-          onLeave={toMenu}
-        />
-      )
+      case 'menu':
+        return (
+          <section className="card">
+            <h2>Play with a partner</h2>
+            <p>
+              Each of you uses your own device: one of you creates a game and shares its link or code, and the other
+              joins with it. You say your translations out loud, so stay on a call or sit together.
+            </p>
+            <button type="button" className="primary" onClick={() => setStage({ kind: 'host-setup' })}>
+              Create a game
+            </button>
+            <button type="button" onClick={() => setStage({ kind: 'join-setup' })}>
+              Join a game
+            </button>
+            <button type="button" className="secondary" onClick={toMode}>
+              Back
+            </button>
+          </section>
+        )
 
-    case 'join-setup':
-      return (
-        <section className="card">
-          <h2>Join a game</h2>
-          <JoinForm onJoin={(code) => setStage({ kind: 'guest', code, attempt: 1 })} />
-          <button type="button" className="secondary" onClick={toMenu}>
-            Back
-          </button>
-        </section>
-      )
+      case 'host-setup':
+        if (defaults === null) return settingsScreen(stage, toMenu)
+        return (
+          <HostSetup
+            languages={languages}
+            topics={staticSource.getTopics()}
+            defaults={defaults}
+            lastTopic={lastTopic}
+            onEdit={editFrom(stage)}
+            onCreate={(settings) => {
+              remember(settings)
+              setStage({ kind: 'host', settings })
+            }}
+            onBack={toMenu}
+          />
+        )
 
-    case 'guest':
-      // The settings are what the host uses to decide what each player reads, so a guest without any sets them first.
-      if (defaults === null) return settingsScreen(stage, toMenu)
-      return (
-        <GuestRoom
-          // A new key makes React start a fresh connection attempt.
-          key={stage.attempt}
-          network={network}
-          languages={languages}
-          saved={{ knows: defaults.knows, learns: defaults.learns }}
-          code={stage.code}
-          onRetry={() => setStage({ ...stage, attempt: stage.attempt + 1 })}
-          onChangeCode={() => setStage({ kind: 'join-setup' })}
-          onLeave={toMenu}
-        />
-      )
+      case 'host':
+        return (
+          <HostRoom
+            network={network}
+            languages={languages}
+            host={{ knows: stage.settings.knows, learns: stage.settings.learns }}
+            firstRound={stage.settings}
+            generator={generator}
+            onLeave={toMenu}
+          />
+        )
+
+      case 'join-setup':
+        return (
+          <section className="card">
+            <h2>Join a game</h2>
+            <JoinForm onJoin={(code) => setStage({ kind: 'guest', code, attempt: 1 })} />
+            <button type="button" className="secondary" onClick={toMenu}>
+              Back
+            </button>
+          </section>
+        )
+
+      case 'guest':
+        // The settings are what the host uses to decide what each player reads, so a guest without any sets them first.
+        if (defaults === null) return settingsScreen(stage, toMenu)
+        return (
+          <GuestRoom
+            // A new key makes React start a fresh connection attempt.
+            key={stage.attempt}
+            network={network}
+            languages={languages}
+            saved={{ knows: defaults.knows, learns: defaults.learns }}
+            code={stage.code}
+            onRetry={() => setStage({ ...stage, attempt: stage.attempt + 1 })}
+            onChangeCode={() => setStage({ kind: 'join-setup' })}
+            onLeave={toMenu}
+          />
+        )
+    }
   }
 }

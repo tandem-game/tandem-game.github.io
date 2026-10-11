@@ -245,3 +245,49 @@ describe('joining through an invite link', () => {
     expect(ui.getByRole('button', { name: 'Create a game' })).toBeInTheDocument()
   })
 })
+
+describe('the header links', () => {
+  const header = (ui: ReturnType<typeof open>['ui']) => within(ui.getByRole('navigation', { name: 'Help and settings' }))
+
+  it('hold How to play and Settings at the top, not in the start card', () => {
+    const { ui } = open(createMemoryNetwork())
+    expect(header(ui).getByRole('button', { name: 'How to play' })).toBeInTheDocument()
+    expect(header(ui).getByRole('button', { name: 'Settings' })).toBeInTheDocument()
+    expect(within(ui.getByRole('heading', { name: 'Start a game' }).closest('section') as HTMLElement).queryByRole('button', { name: /How to play|Settings/ })).not.toBeInTheDocument()
+  })
+
+  it('are on every screen outside a game, so the settings return to the screen they were opened from', async () => {
+    const user = userEvent.setup()
+    const { ui } = open(createMemoryNetwork())
+    await user.click(ui.getByRole('button', { name: '2 players' }))
+    await user.click(header(ui).getByRole('button', { name: 'Settings' }))
+    await user.click(ui.getByRole('button', { name: 'Back' }))
+    expect(ui.getByRole('heading', { name: 'Play with a partner' })).toBeInTheDocument()
+    await user.click(header(ui).getByRole('button', { name: 'How to play' }))
+    await user.click(ui.getByRole('button', { name: 'Back to the start' }))
+    expect(ui.getByRole('heading', { name: 'Play with a partner' })).toBeInTheDocument()
+  })
+
+  it('leave out each link on the screen it opens, and offer the other', async () => {
+    const user = userEvent.setup()
+    const { ui } = open(createMemoryNetwork())
+    await user.click(header(ui).getByRole('button', { name: 'Settings' }))
+    expect(header(ui).queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
+    expect(header(ui).getByRole('button', { name: 'How to play' })).toBeInTheDocument()
+  })
+
+  it('are not shown on the first visit', () => {
+    const { ui } = open(createMemoryNetwork(), undefined, null)
+    expect(ui.queryByRole('navigation', { name: 'Help and settings' })).not.toBeInTheDocument()
+  })
+
+  it('are not shown while playing', async () => {
+    saveLastTopic('weather')
+    const user = userEvent.setup()
+    const { ui } = open(createMemoryNetwork(), instantGenerator().generator)
+    await user.click(ui.getByRole('button', { name: '1 player' }))
+    await user.click(ui.getByRole('button', { name: 'Start' }))
+    await ui.findByText(/^Turn 1 of/)
+    expect(ui.queryByRole('navigation', { name: 'Help and settings' })).not.toBeInTheDocument()
+  })
+})
