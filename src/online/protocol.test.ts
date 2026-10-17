@@ -29,6 +29,10 @@ describe('parseGuestMessage', () => {
     expect(parseGuestMessage({ type: 'reveal', extra: 'x' })).toEqual({ type: 'reveal' })
   })
 
+  it('accepts ping, which the host answers so the guest can tell the link is alive', () => {
+    expect(parseGuestMessage({ type: 'ping', extra: 'x' })).toEqual({ type: 'ping' })
+  })
+
   it('no longer knows confirm or regenerate, which only the host acts on now', () => {
     expect(parseGuestMessage({ type: 'confirm' })).toBeNull()
     expect(parseGuestMessage({ type: 'regenerate' })).toBeNull()
@@ -72,6 +76,10 @@ describe('parseGuestMessage', () => {
 })
 
 describe('parseHostMessage', () => {
+  it('accepts pong, the host\'s answer to a ping', () => {
+    expect(parseHostMessage({ type: 'pong', extra: 'x' })).toEqual({ type: 'pong' })
+  })
+
   it('accepts a full room state', () => {
     expect(parseHostMessage({ type: 'state', state: roomState })).toEqual({
       type: 'state',
@@ -91,7 +99,7 @@ describe('parseHostMessage', () => {
   it('drops unexpected fields from a sentence', () => {
     const turn = { player: 1, sentence: { id: 'a', text: 'x', translation: 'y', answer: 'z' }, learning: 'en' }
     const parsed = parseHostMessage({ type: 'state', state: withRound({ turns: [turn], index: 0 }) })
-    expect(parsed?.state.round?.game.turns[0].sentence).toEqual({ id: 'a', text: 'x', translation: 'y' })
+    expect(parsed?.type === 'state' ? parsed.state.round?.game.turns[0].sentence : undefined).toEqual({ id: 'a', text: 'x', translation: 'y' })
   })
 
   it('accepts a state where both players read and learn the same languages', () => {
@@ -120,7 +128,7 @@ describe('parseHostMessage', () => {
 
     it('drops unexpected fields from it', () => {
       const parsed = parseHostMessage({ type: 'state', state: writingState({ secret: 'x', turns: [] }) })
-      expect(parsed?.state.writing).toEqual(writing)
+      expect(parsed?.type === 'state' ? parsed.state.writing : undefined).toEqual(writing)
     })
 
     it.each([

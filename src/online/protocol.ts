@@ -23,13 +23,18 @@ export interface RoomState {
   round: { topic: string; game: GameState } | null
 }
 
-export type HostMessage = { type: 'state'; state: RoomState }
+export type HostMessage =
+  | { type: 'state'; state: RoomState }
+  /** The answer to a guest's ping: it says nothing but that the link works (see `heartbeat`). */
+  | { type: 'pong' }
 
 export type GuestMessage =
   /** The guest's saved settings, sent once they are connected; null when they are missing or unusable. */
   | { type: 'hello'; languages: PlayerLanguages | null }
   | { type: 'next-turn' }
   | { type: 'reveal' }
+  /** Sent regularly so that both sides notice a link that died without closing. */
+  | { type: 'ping' }
 
 // Messages come from another device, so nothing in them is trusted: each parser
 // checks the shape and size of the data and returns null for anything else.
@@ -107,6 +112,7 @@ function parseRoomState(raw: unknown): RoomState | null {
 }
 
 export function parseHostMessage(raw: unknown): HostMessage | null {
+  if (isRecord(raw) && raw.type === 'pong') return { type: 'pong' }
   if (!isRecord(raw) || raw.type !== 'state') return null
   const state = parseRoomState(raw.state)
   return state ? { type: 'state', state } : null
@@ -117,5 +123,6 @@ export function parseGuestMessage(raw: unknown): GuestMessage | null {
   if (raw.type === 'hello') return { type: 'hello', languages: parseLanguages(raw.languages) }
   if (raw.type === 'next-turn') return { type: 'next-turn' }
   if (raw.type === 'reveal') return { type: 'reveal' }
+  if (raw.type === 'ping') return { type: 'ping' }
   return null
 }

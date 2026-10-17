@@ -9,6 +9,8 @@ import { generateRoomCode } from '../online/roomCode'
 
 interface Endpoint extends Connection {
   peer?: Endpoint
+  /** A link that died without closing: nothing is delivered and nobody is told. */
+  stalled: boolean
   receive(message: unknown): void
   closedByPeer(): void
 }
@@ -25,8 +27,9 @@ function createEndpoint(): Endpoint {
   }
 
   const endpoint: Endpoint = {
+    stalled: false,
     send(message) {
-      if (closed) return
+      if (closed || endpoint.stalled) return
       const copy: unknown = JSON.parse(JSON.stringify(message))
       queueMicrotask(() => endpoint.peer?.receive(copy))
     },
@@ -38,7 +41,7 @@ function createEndpoint(): Endpoint {
       queueMicrotask(() => endpoint.peer?.closedByPeer())
     },
     receive(message) {
-      if (!closed) messageHandlers.forEach((handler) => handler(message))
+      if (!closed && !endpoint.stalled) messageHandlers.forEach((handler) => handler(message))
     },
     closedByPeer() {
       if (closed) return
@@ -54,6 +57,11 @@ export interface MemoryNetwork extends Network {
   unavailable: boolean
   /** The host's end of each connection to a room, e.g. to simulate a guest dropping. */
   connectionsTo(code: string): Connection[]
+  /**
+   * Kills every link to a room without closing it, as a device that fell asleep or lost its network would; `false`
+   * brings them back. Later joins work either way.
+   */
+  stall(code: string, stalled?: boolean): void
 }
 
 export function createMemoryNetwork(): MemoryNetwork {
@@ -100,6 +108,13 @@ export function createMemoryNetwork(): MemoryNetwork {
     },
 
     connectionsTo: (code) => [...(hostEnds.get(code) ?? [])],
+
+    stall(code, stalled = true) {
+      hostEnds.get(code)?.forEach((end) => {
+        end.stalled = stalled
+        if (end.peer) end.peer.stalled = stalled
+      })
+    },
   }
   return network
 }

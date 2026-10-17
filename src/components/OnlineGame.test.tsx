@@ -1,6 +1,7 @@
 import { render, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { PING_INTERVAL_MS, SILENCE_LIMIT_MS } from '../online/heartbeat'
 import { saveHostDefaults } from '../game/hostPreferences'
 import {
   SAVED_DEFAULTS,
@@ -356,6 +357,34 @@ describe('connection problems', () => {
 
     await user.click(host.ui.getByRole('button', { name: 'Change topic' }))
     expect(await host.ui.findByLabelText('Or enter your own topic')).toBeInTheDocument()
+  })
+
+  describe('a link that died without closing', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('brings the guest back to the game by itself, on the sentence the host is on', async () => {
+      // Time runs on its own, so the screens keep working, and the test can jump ahead past the silence limit.
+      vi.useFakeTimers({ shouldAdvanceTime: true })
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      const network = createMemoryNetwork()
+      const host = await createGame(network, user)
+      const guest = await joinGame(network, user, host.code)
+      await startRound(host, guest)
+      await vi.advanceTimersByTimeAsync(PING_INTERVAL_MS) // the guest and the host have heard from each other
+
+      // The guest's phone slept: nothing gets through either way, and nothing is closed. Meanwhile the game moves on.
+      network.stall(host.code)
+      await user.click(await host.ui.findByRole('button', { name: 'Next turn' }))
+      expect(guest.ui.getByText('Turn 1 of 4')).toBeInTheDocument()
+
+      await vi.advanceTimersByTimeAsync(SILENCE_LIMIT_MS + PING_INTERVAL_MS * 2)
+
+      expect(await guest.ui.findByText('Turn 2 of 4')).toBeInTheDocument()
+      expect(guest.ui.queryByRole('alert')).not.toBeInTheDocument()
+      expect(host.ui.queryByText(/partner is disconnected/i)).not.toBeInTheDocument()
+    })
   })
 
   it('tells the guest when the host leaves', async () => {

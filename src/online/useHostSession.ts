@@ -1,7 +1,8 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import type { PlayerLanguages } from '../content/types'
 import type { Connection, Network, Room } from './network'
-import { parseGuestMessage, type RoomState } from './protocol'
+import { startHeartbeat, type Heartbeat } from './heartbeat'
+import { parseGuestMessage, type HostMessage, type RoomState } from './protocol'
 import { createRoom, roomReducer, type RoomEvent } from './roomReducer'
 
 export interface HostSession {
@@ -32,10 +33,14 @@ export function useHostSession(
   const [code, setCode] = useState<string | null>(null)
   // The connection the guest is on, so a guest who rejoins gets a copy of the state on their new one.
   const [guestConnection, setGuestConnection] = useState<Connection | null>(null)
+  // The guest stopped answering pings. The link stays open: a device that wakes up may come back on it.
+  const [silent, setSilent] = useState(false)
+  // Counts the times a silent guest came back, so they get the game as it is now.
+  const [returned, setReturned] = useState(0)
   const guest = useRef<Connection | null>(null)
-
   useEffect(() => {
     let cancelled = false
+    let heartbeat: Heartbeat | null = null
     let openRoom: Room | null = null
 
     function accept(connection: Connection) {
@@ -44,9 +49,32 @@ export function useHostSession(
       const previous = guest.current
       guest.current = connection // first, so the old connection closing does not count as the guest leaving
       previous?.close()
+      heartbeat?.stop()
+
+      function dropGuest() {
+        if (guest.current !== connection) return
+        guest.current = null
+        setSilent(false)
+        setGuestConnection(null)
+      }
+
+      // A guest whose device fell asleep never closes the link; the host only finds out because the pings stop.
+      const beat = startHeartbeat({
+        onSilent: () => setSilent(true),
+        onAlive() {
+          setSilent(false)
+          setReturned((count) => count + 1)
+        },
+      })
+      heartbeat = beat
+      setSilent(false)
+
       connection.onMessage((raw) => {
         const message = parseGuestMessage(raw)
-        if (message?.type === 'hello') {
+        beat.heard(message?.type === 'ping')
+        if (message?.type === 'ping') {
+          connection.send({ type: 'pong' } satisfies HostMessage)
+        } else if (message?.type === 'hello') {
           dispatch({ type: 'GUEST_HELLO', languages: message.languages })
         } else if (message?.type === 'next-turn') {
           dispatch({ type: 'NEXT_TURN', from: 2 })
@@ -55,10 +83,8 @@ export function useHostSession(
         }
       })
       connection.onClose(() => {
-        if (guest.current === connection) {
-          guest.current = null
-          setGuestConnection(null)
-        }
+        beat.stop()
+        dropGuest()
       })
       setGuestConnection(connection)
     }
@@ -81,6 +107,7 @@ export function useHostSession(
 
     return () => {
       cancelled = true
+      heartbeat?.stop()
       guest.current?.close()
       guest.current = null
       openRoom?.close()
@@ -90,7 +117,7 @@ export function useHostSession(
   // Send the guest a full copy whenever the state changes or the guest (re)connects.
   useEffect(() => {
     guestConnection?.send({ type: 'state', state: room })
-  }, [room, guestConnection])
+  }, [room, guestConnection, returned])
 
-  return { status, code, room, partnerConnected: guestConnection !== null, dispatch }
+  return { status, code, room, partnerConnected: guestConnection !== null && !silent, dispatch }
 }
