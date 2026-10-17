@@ -112,7 +112,7 @@ const EXAMPLES: Record<Difficulty, Record<LanguageCode, string>> = {
   A2: { en: 'We can walk to the market tomorrow.', de: 'Wir können morgen zum Markt laufen.' },
   B1: {
     en: "I've never tried this, but I will.",
-    de: 'Das hab ich noch nie probiert, aber ich probier es mal.',
+    de: 'Ich habe das noch nie probiert, aber ich probiere es mal.',
   },
   B2: {
     en: 'Even though it was pouring, the market, which opens at six, was packed.',
@@ -120,7 +120,7 @@ const EXAMPLES: Record<Difficulty, Record<LanguageCode, string>> = {
   },
   C1: {
     en: "If I'd known how packed it would be, I would've gone earlier.",
-    de: 'Wenn ich gewusst hätte, wie voll es wird, wär ich früher hingegangen.',
+    de: 'Wenn ich gewusst hätte, wie voll es wird, wäre ich früher hingegangen.',
   },
   C2: {
     en: 'Honestly, even with the crowds, the vendors, who sell some really unusual stuff, stayed pretty relaxed.',
@@ -128,12 +128,15 @@ const EXAMPLES: Record<Difficulty, Record<LanguageCode, string>> = {
   },
 }
 
-/** How each language sounds when spoken every day: standard language, no dialect, no slang. */
+/** How each language sounds when spoken every day: standard language and spelling, no dialect, no slang. */
 const REGISTER: Record<LanguageCode, string> = {
   en: 'contractions (I\'m, don\'t, it\'s) and common phrasal verbs, not stiff phrasing like "I shall purchase a ticket" (say "I\'ll buy a ticket")',
   de:
-    'Umgangssprache: spoken forms (hab, gibt\'s, wär), the Perfekt instead of the Präteritum for most verbs, du rather than Sie, ' +
-    'and the present tense for the future ("Ich ruf dich später an", not "Ich werde dich später anrufen"; "Ich steh jetzt auf", not "Ich werde jetzt aufstehen")',
+    'the wording of everyday spoken German, written in standard spelling: the Perfekt instead of the Präteritum for most verbs, du rather than Sie, ' +
+    'würde + infinitive instead of the bare Konjunktiv II ("Wenn ich ein Kind wäre, würde mich jeder lieben"), ' +
+    'light particles like mal, doch or eigentlich, and apostrophe contractions like gibt\'s and geht\'s. ' +
+    'Use the present tense for the future ("Ich rufe dich später an", not "Ich werde dich später anrufen"). ' +
+    'Always write full verb forms and never drop the final -e ("ich habe", "ich wäre", "ich rufe", not "ich hab", "ich wär", "ich ruf")',
 }
 
 function levelPrompt(language: LanguageCode, difficulty: Difficulty): string {
@@ -250,7 +253,7 @@ export function createHandler({ ai, kv, allowedOrigins, limiters, dailyCap = DEF
 
   // Every combination of language, topic, number of sentences, and difficulty has its own stored batches.
   const poolKey = ({ language, count, difficulty }: GenerateRequest, id: string) =>
-    `pool:v7:${language}:${id}:${count}:${difficulty}`
+    `pool:v8:${language}:${id}:${count}:${difficulty}`
 
   /** A stored batch, if it is still a valid answer to `request`. */
   function validBatch(stored: unknown, { language, count }: GenerateRequest): GeneratedSentences | null {

@@ -300,7 +300,9 @@ describe('generating sentences', () => {
         for (const level of ['A1', 'B1', 'C2']) {
           const prompt = await promptFor(level)
           expect(prompt).toMatch(/the way people really talk day to day/)
-          expect(prompt).toMatch(/Umgangssprache/) // the sentences are German
+          expect(prompt).toMatch(/everyday spoken German/) // the sentences are German
+          expect(prompt).toMatch(/standard spelling/)
+          expect(prompt).toMatch(/never drop the final -e/)
           expect(prompt).toMatch(/contractions/) // the translation is English
           expect(prompt).toMatch(/no dialect, no slang/)
           expect(prompt).not.toMatch(/formal register/)
@@ -308,6 +310,22 @@ describe('generating sentences', () => {
         // German is spoken with the present tense for the future, so the B1 list does not ask for werden
         expect(await promptFor('B1')).toMatch(/present tense for the future/)
         expect(await promptFor('B1')).not.toMatch(/Perfekt, werden/)
+      })
+
+      it('writes German in standard spelling, in the instructions and in every level example', async () => {
+        // "hab", "wär", "ruf", "steh" are how people speak, not how German is normally written, and the model copies examples.
+        const elided = /\b(hab|wär|ruf|steh|probier|werd|geh|mach)\s+(ich|ihn|sie|es|dich|mich|mal|jetzt)\b|\bwär\b|\bhab\b/i
+        for (const level of ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']) {
+          const prompt = await promptFor(level)
+          const example = prompt.match(/must not copy: "([^"]*)"/)?.[1] ?? ''
+          expect(example).not.toBe('')
+          expect(example).not.toMatch(elided)
+        }
+        const prompt = await promptFor('B1')
+        expect(prompt).not.toMatch(/\(hab,/)
+        expect(prompt).toContain("gibt's") // apostrophe contractions are fine in writing
+        expect(prompt).toContain('Ich habe das noch nie probiert')
+        expect(prompt).toContain('würde')
       })
 
       it('keeps every level within what the checks allow, even though the model writes about three words more', async () => {
@@ -335,7 +353,7 @@ describe('generating sentences', () => {
 })
 
 describe('stored sentences for preset topics', () => {
-  const key = 'pool:v7:de:weather:2:B1'
+  const key = 'pool:v8:de:weather:2:B1'
 
   it('stores a freshly generated batch for 30 days', async () => {
     ai.replies = [goodReply]
@@ -394,7 +412,7 @@ describe('stored sentences for preset topics', () => {
     ai.replies = [otherReply]
     const { body } = await ask(preset({ difficulty: 'B2' }))
     expect(body).toEqual(other)
-    expect(kv.keys('pool:')).toEqual([key, 'pool:v7:de:weather:2:B2'])
+    expect(kv.keys('pool:')).toEqual([key, 'pool:v8:de:weather:2:B2'])
     // Each level is then served from its own store.
     expect((await ask(preset({ difficulty: 'B2' }))).body).toEqual(other)
     expect((await ask(preset())).body).toEqual(good)
@@ -411,7 +429,7 @@ describe('stored sentences for preset topics', () => {
     ]
     const { body } = await ask(preset({ language: 'en' }))
     expect((body.sentences as string[])[0]).toMatch(/swim/)
-    expect(kv.keys('pool:')).toEqual([key, 'pool:v7:en:weather:2:B1'])
+    expect(kv.keys('pool:')).toEqual([key, 'pool:v8:en:weather:2:B1'])
   })
 
   it('still answers when storing the batch fails', async () => {
@@ -474,7 +492,7 @@ describe('the daily cap on AI calls', () => {
 
   it('falls back to a stored batch for a preset when the cap is reached', async () => {
     kv.data.set(capKey, '5')
-    kv.data.set('pool:v7:de:weather:2:B1', JSON.stringify([other]))
+    kv.data.set('pool:v8:de:weather:2:B1', JSON.stringify([other]))
     expect((await ask(preset({ fresh: true }))).body).toEqual(other)
     expect((await ask(preset({ language: 'en' }))).status).toBe(429)
   })
@@ -572,13 +590,13 @@ describe('rounds of other lengths', () => {
   })
 
   describe('stored sentences', () => {
-    const key = 'pool:v7:de:weather:2:B1'
+    const key = 'pool:v8:de:weather:2:B1'
 
     it('keeps a separate store for each count', async () => {
       ai.replies = [goodReply, modelReply(five)]
       await ask(preset())
       await ask(preset({ count: 5 }))
-      expect([...kv.keys('pool:')].sort()).toEqual([key, 'pool:v7:de:weather:5:B1'].sort())
+      expect([...kv.keys('pool:')].sort()).toEqual([key, 'pool:v8:de:weather:5:B1'].sort())
     })
 
     it('stores translations with their sentences and serves both from the store', async () => {
